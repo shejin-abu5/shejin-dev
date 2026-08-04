@@ -457,7 +457,6 @@ onBeforeUnmount(() => {
           <h2 class="gantt-title">Experience</h2>
         </header>
 
-        <!-- Decorative: every date on it is also written out inside a card. -->
         <div class="gantt-ruler" aria-hidden="true">
           <span v-for="tick in ticks" :key="tick.label" class="gantt-tick" :style="{ left: tick.left }">
             <i />{{ tick.label }}
@@ -484,14 +483,6 @@ onBeforeUnmount(() => {
               </p>
               <p class="gantt-summary">{{ item.summary }}</p>
 
-              <!-- The card has no room for bullets, which are this section's
-                   substance. So they stay in the markup always and each
-                   presentation clips what it can't carry, sr-only rather than
-                   display:none: the chart above lg hides this block whole, the
-                   rail below it hides only the list and keeps the company and
-                   the dates. The one path that shows everything is the static
-                   list — what desktop reduced-motion gets, and what a phone
-                   falls back to with no CSS at all. -->
               <div class="gantt-detail">
                 <p class="gantt-detail-head">{{ item.company }}</p>
                 <p class="gantt-detail-years">{{ item.years }}</p>
@@ -500,18 +491,11 @@ onBeforeUnmount(() => {
                 </ul>
               </div>
 
-              <!-- Rail only. Bullet counts run one to four, so equal-height
-                   cards leave the early roles most of a screen of bare tint;
-                   this gives that space to the one thing the phone loses when
-                   the ruler goes away. Decorative — .gantt-detail-years states
-                   the same range in full, with months, right above it. -->
               <p class="gantt-period" aria-hidden="true">{{ item.period }}</p>
             </div>
           </article>
         </div>
 
-        <!-- Rail position. Labelled by employer, which is what a listener is
-             choosing between — "slide 2 of 4" names nothing. -->
         <div class="swipe-dots">
           <button
             v-for="(item, i) in items"
