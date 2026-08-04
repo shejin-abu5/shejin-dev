@@ -75,12 +75,6 @@ useHead({
       Skip to content
     </a>
 
-    <!--
-      The page's ball. Mounted here rather than in any one section because the
-      journey it makes is the page's, not a section's: it starts perched in the
-      hero's headline and lands its way down through every section that has
-      registered a surface for it.
-    -->
     <TheScrollBall />
 
     <TheNav />

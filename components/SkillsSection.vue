@@ -237,11 +237,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!--
-        Closes the section header, and is the surface the page's ball lands on
-        out of the experience chart. Carries the margin the header block used
-        to own, so the space above the grid is unchanged.
-      -->
       <span ref="railRef" class="mb-16 md:block hidden h-px w-full bg-hair" aria-hidden="true" />
 
       <div
@@ -254,28 +249,9 @@ onMounted(() => {
         @keydown.arrow-left.prevent="goTo(active - 1)"
         @keydown.arrow-right.prevent="goTo(active + 1)"
       >
-        <!--
-          Perspective sits on each card, never on the grid. Shared on the
-          container, all nine would resolve to one vanishing point and the
-          outer columns would visibly skew as they turned.
-        -->
         <div v-for="(card, i) in cards" :key="card.category" class="reveal skill-card">
           <div :ref="(el) => setFlipper(el, i)" class="skill-flipper">
-            <!-- Both faces sit in the same grid cell, so the flipper's height
-                 is the taller of the two and the row stretches every card to
-                 match. No fixed height to overflow, no clipped back. -->
             <div class="skill-face skill-face--front" :class="{ 'is-back': flipped[i] }" :aria-hidden="flipped[i]">
-              <!-- The card's only glyph: oversized, bled off the top-right
-                   corner and held at a silver, so it reads as surface texture
-                   rather than an icon. Without it the front is a name and a
-                   button in a tall empty box.
-
-                   Thinner stroke than a 24px icon would take — at this size
-                   the 24-unit box is scaled ~7.75×, so 0.4 lands near 3.1px on
-                   screen and the wrench and globe keep their detail instead of
-                   silting up. Also the floor: the mark carries an opacity in
-                   the low tenths, and much under 3px a stroke that faint stops
-                   resolving as a line on a standard-DPI display. -->
               <svg class="skill-ghost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path v-for="d in card.icon" :key="d" :d="d" />
               </svg>
@@ -310,8 +286,6 @@ onMounted(() => {
                 <li v-for="tech in card.stack" :key="tech" class="skill-chip">{{ tech }}</li>
               </ul>
 
-              <!-- The chips are the whole payload now, so this row carries
-                   nothing but the way back. -->
               <div class="skill-row skill-row--back">
                 <button
                   type="button"
@@ -332,8 +306,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Rail position. Labelled by category, which is what a listener is
-           choosing between — "slide 7 of 9" names nothing. -->
       <div class="swipe-dots">
         <button
           v-for="(card, i) in cards"
@@ -467,19 +439,18 @@ onMounted(() => {
    distinguishes one card from the next. Big enough to be the card's texture:
    it fills the whole upper half and runs off two edges.
 
-   The colour is the one thing that differs between the two presentations: ink
-   in the grid, accent on the rail. Nine of these tiled in a 3x3 is a different
-   proposition from one at a time in a swiped frame — the grid needs them to
-   recede into a single grey field, and the rail, where only one is ever on
-   screen, can carry the colour. */
+   The two presentations part company entirely below 1024px: in the grid this
+   is a cropped background wash, on the rail it is a foreground icon. Nine of
+   these tiled in a 3x3 is a different proposition from one at a time in a
+   swiped frame — the grid needs them to recede into a single grey field, and
+   the rail, where only one card is ever on screen, has both the room and the
+   attention for the glyph to be an actual mark that names the card.
+
+   Only what both share sits here; each presentation sets its own geometry and
+   colour below. Neither block is unbounded, so there is no rule from one side
+   for the other to have to override. */
 .skill-ghost {
   position: absolute;
-  left: -34px;
-  top: -30px;
-  height: 186px;
-  width: 186px;
-  color: theme('colors.ink');
-  opacity: 0.06;
   pointer-events: none;
   /* Opacity, not `color`: the glyph is stroked with currentColor and the mark
      is one flat tone either way, so shifting it on hover is a matter of how
@@ -487,60 +458,66 @@ onMounted(() => {
   transition: opacity 0.45s ease;
 }
 
+/* The grid's mark: ink, bled off the top-left corner and clipped by the
+   radius, big enough to be the card's texture. */
+@media (min-width: 1024px) {
+  .skill-ghost {
+    left: -34px;
+    top: -30px;
+    height: 186px;
+    width: 186px;
+    color: theme('colors.ink');
+    opacity: 0.06;
+  }
+}
+
 /* Hover only where there is a real pointer — on touch this latches on tap and
    stays lit after the card has already flipped away. */
-@media (hover: hover) {
+@media (min-width: 1024px) and (hover: hover) {
   .skill-card:hover .skill-ghost {
     opacity: 0.045;
   }
 }
 
-/* The rail's mark. Split at 1023px, the same line the grid becomes the rail,
-   so the colour changes with the presentation and not at some width of its
-   own.
+/* The rail's mark, and a different object: a 60px icon sitting inside the
+   card's padding at full accent, not a tint of it.
 
-   `accent`, not `accent-text`: a large decorative mark is what the brighter of
-   the pair is for, and nothing here is read — it is aria-hidden. The opacity
-   sits under the ink's because a saturated orange carries much further than
-   the same amount of grey; held at the ink's strength it becomes the loudest
-   thing on the card. This lands around #FFFAF9 over paper. */
+   A wash does not survive the move to a phone. It works in the grid because
+   nine of them make a field, and a field reads at strengths a single instance
+   cannot — alone in a swiped frame there is nothing for a 6%-of-ink smudge to
+   be read against, so it is either invisible or it looks like a printing
+   fault. At icon size the glyph has to carry on its own terms instead.
+
+   Absolute, so it stays out of the flex flow and the category row keeps its
+   `margin-top: auto` floor. Aligned to the face's own 1.375rem padding so it
+   hangs off the same left edge as the name below it. */
 @media (max-width: 1023px) {
   .skill-ghost {
+    left: 1.375rem;
+    top: 1.375rem;
+    height: 60px;
+    width: 60px;
     color: theme('colors.accent');
-    opacity: 0.026;
-  }
-}
-
-/* A tablet in the rail range can still have a mouse, and the hover rule above
-   outranks the flat one — without this it would push the orange the wrong way,
-   to the ink's value. */
-@media (max-width: 1023px) and (hover: hover) {
-  .skill-card:hover .skill-ghost {
-    opacity: 0.022;
-  }
-}
-
-/* The mark is sized against the card it is cropped by, and on a phone that
-   card is ~326px where the desktop grid's is ~400px. Left at 186px it stops
-   reading as texture in the corner and starts being the card.
-
-   Bounded at 767px rather than at the rail's own 1023px on purpose: between
-   those two the rail caps a card at 420px, which is wider than a grid column,
-   so the full-size mark is already right there. */
-@media (max-width: 767px) {
-  .skill-ghost {
-    left: -26px;
-    top: -22px;
-    height: 140px;
-    width: 140px;
+    opacity: 1;
+    /* Stroke width is a fraction of the 24-unit box, so it scales with the
+       glyph and has to be re-set whenever the size moves — the 0.4 in the
+       markup is drawn for rendering at 186px. Here 1 renders ~2.5px: near
+       enough the chevron's weight (1.75 at 17px, ~2.4px) that the card's two
+       marks look drawn by the same hand, without the icon going spindly at
+       six times the chevron's size. */
+    stroke-width: 1;
   }
 }
 
 /* Kept from when the mark sat in the bottom-left, on top of the category name:
    an absolutely-positioned element paints over in-flow content regardless of
    source order, and this lifts the row back above it. Still earning its place
-   with the mark back up top — it is 186px tall against a card that floors at
-   134px, so it reaches the row on any short card.
+   with the mark back up top, in both presentations: in the grid it is 186px
+   tall against a card that floors at 134px, and on the rail the 60px icon
+   bottoms out at 82px against a row that starts around 78px on that same floor
+   card. Neither actually collides at the heights the back face forces in
+   practice, but both come close enough that the stacking should not be left to
+   source order.
 
    `z-index` with no `position` is deliberate and not a mistake: the row is a
    flex item of .skill-face, and z-index applies to those. Adding

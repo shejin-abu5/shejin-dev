@@ -53,9 +53,6 @@ const links = [
           class="flex items-center gap-1.5 rounded-full border border-hair px-3 py-1.5 sm:px-3.5"
         >
           <span class="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
-          <!-- Shown at every width. Hidden below sm the pill was a bare orange
-               dot, which reads as a stray bullet rather than as a status, and
-               the row measures ~275px of the 350px a 390px screen has. -->
           <span class="font-data text-[11px] tracking-wide text-steel">
             Open to work
           </span>

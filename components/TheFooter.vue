@@ -95,8 +95,6 @@ onMounted(() => {
         </a>
       </div>
 
-      <!-- Its top border is where the page's ball comes to rest — see the
-           perch registered above. -->
       <div
         ref="restRef"
         class="mt-24 flex flex-wrap items-end justify-between gap-6 border-t border-white/15 pt-8"
@@ -132,10 +130,6 @@ onMounted(() => {
           >
             LinkedIn
           </a>
-          <!--
-            TODO: no GitHub URL was provided — replace href with the real
-            profile URL. Left pointing to "#" rather than a guessed link.
-          -->
           <a
             href="https://github.com/shejin-abu5"
             aria-label="GitHub"
