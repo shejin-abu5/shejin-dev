@@ -19,6 +19,8 @@ logs
 .idea
 .vscode
 .superpowers
+docs/superpowers/
+
 
 # Local env files
 .env
