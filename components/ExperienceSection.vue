@@ -485,9 +485,13 @@ onBeforeUnmount(() => {
               <p class="gantt-summary">{{ item.summary }}</p>
 
               <!-- The card has no room for bullets, which are this section's
-                   substance. So they stay in the markup always and the chart
-                   hides them under an sr-only clip rather than display:none —
-                   see the lg media query. Below lg this is the visible body. -->
+                   substance. So they stay in the markup always and each
+                   presentation clips what it can't carry, sr-only rather than
+                   display:none: the chart above lg hides this block whole, the
+                   rail below it hides only the list and keeps the company and
+                   the dates. The one path that shows everything is the static
+                   list — what desktop reduced-motion gets, and what a phone
+                   falls back to with no CSS at all. -->
               <div class="gantt-detail">
                 <p class="gantt-detail-head">{{ item.company }}</p>
                 <p class="gantt-detail-years">{{ item.years }}</p>
@@ -832,38 +836,72 @@ onBeforeUnmount(() => {
   }
 
   /* Fills the row the rail stretched it to, so the period below can find the
-     card's floor rather than sitting under the last bullet. */
+     card's floor rather than sitting under the last body copy. */
   .gantt-card {
     display: flex;
     flex: 1;
     flex-direction: column;
   }
 
-  /* Every card is as tall as the fullest one — the current role, at four
-     bullets against the first role's one — so what this saves on that card it
-     saves on all four. */
-  .gantt-bullet {
-    margin-bottom: 0.5rem;
-    font-size: 13.5px;
-    line-height: 1.55;
+  /* The one-sentence summary becomes the card's body, in place of the bullet
+     list. That list is what made this card tall — four bullets on the current
+     role, each running three or four lines at a phone's measure, and every
+     card stretched to that one. `summary` was written to be exactly this, and
+     it is what the chart's cards show above lg.
+
+     It is hidden by the static-list block above, which also answers reduced
+     motion at desktop widths; that path keeps the full bullets and is
+     deliberately left alone. This only re-shows it for the rail. The meta line
+     stays hidden there — .gantt-detail-head names the same employer in full
+     two lines further down. */
+  .gantt-summary {
+    display: block;
   }
 
+  /* The company and the month-precise range stay on the card: dropping them
+     with the bullets left it too short to read as a card at all. Only the list
+     itself goes, and it goes under an sr-only clip rather than display:none —
+     the same device the chart uses above lg — so nothing leaves the
+     accessibility tree or the crawled HTML. */
   .gantt-detail {
     margin-top: 0.875rem;
   }
 
+  .gantt-detail ul {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* `steel` measures ~4.2:1 on the darker tints, under AA at these sizes.
+     --card-ink holds 8:1 on all five. Same reasoning as the lg block. */
+  .gantt-summary,
+  .gantt-detail-head,
+  .gantt-detail-years {
+    color: var(--card-ink);
+  }
+
+  /* Scaled with the card. At the old 44px it was a quarter of the height a
+     shortened card has to spend, which is a lot for a decoration. */
   .gantt-period {
     display: block;
     margin-top: auto;
-    padding-top: 1.5rem;
+    padding-top: 1.25rem;
     font-family: theme('fontFamily.display');
-    font-size: clamp(30px, 9vw, 44px);
+    font-size: clamp(28px, 8vw, 38px);
     font-weight: 900;
     line-height: 1;
     letter-spacing: -0.02em;
     /* Sunk into the tint rather than printed on it. Deliberately below the
-       contrast floor for text, which is why it is aria-hidden and why the
-       same range is stated in words directly above. */
+       contrast floor for text, which is why it is aria-hidden — the range a
+       screen reader gets is .gantt-detail-years, in full and with months,
+       from the block above. */
     color: rgba(18, 18, 18, 0.14);
   }
 
@@ -874,23 +912,10 @@ onBeforeUnmount(() => {
     padding-top: 1.5rem;
   }
 
-  /* Same reasoning as the lg block: `steel` measures ~4.2:1 on the darker
-     tints, under AA at these sizes. --card-ink holds 8:1 on all five. */
-  .gantt-detail-head,
-  .gantt-detail-years,
-  .gantt-bullet {
-    color: var(--card-ink);
-  }
-
   /* Large-bold at this size, so 3:1 is the bar; this clears 5.6:1 on the mint,
      the darkest of the five. */
   .gantt-index {
     color: #585c64;
-  }
-
-  /* `hair` is a hairline for white paper and disappears entirely on a tint. */
-  .gantt-bullet::before {
-    color: rgba(18, 18, 18, 0.28);
   }
 }
 </style>
