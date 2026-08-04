@@ -105,11 +105,6 @@ onMounted(() => {
 
 <template>
   <section ref="sectionRef" class="py-12 md:py-[120px]">
-    <!--
-      Narrower than the 1240px every other section runs at. Two cards holding a
-      degree and three languages do not need the full measure, and pulling them
-      in reads as a coda rather than a fifth act.
-    -->
     <div class="mx-auto max-w-[960px] px-5 md:px-8">
       <h2 class="sr-only">Education and Languages</h2>
 
@@ -120,21 +115,7 @@ onMounted(() => {
           </svg>
 
 
-          <!-- Its top edge is the surface the page's ball lands on. There used
-               to be a hairline span here for that, but it was styled
-               `display: none` when the eyebrow above it went — and a hidden
-               element has no rect, so the ball was being placed at the origin
-               of a 0×0 box: the top-left corner of the viewport, a screen and
-               a half from where the section is. Anchoring to a box that is
-               actually laid out is what makes the landing real, and this one
-               is at the exact y the hairline was.
-
-               Both cards open with the same icon block, so this sits at the
-               same y as Languages' first row — which is what makes the fall
-               between the two columns exactly two rows. -->
           <div ref="eduRailRef" class="edu-body">
-            <!-- One degree is one fact. Splitting it across two rows to match
-                 the column beside it was padding, not structure. -->
             <h3 class="edu-degree">BCA in Computer Science</h3>
             <p class="edu-meta">Bharathiar University, India</p>
             <p class="edu-meta">2008 — 2011</p>
@@ -146,7 +127,6 @@ onMounted(() => {
             <path v-for="d in BUBBLE" :key="d" :d="d" />
           </svg>
 
-          <!-- <p class="edu-eyebrow">Languages</p> -->
 
           <ul class="lang-list">
             <li
@@ -156,9 +136,6 @@ onMounted(() => {
               class="lang-row"
             >
               <span class="lang-names">
-                <!-- The writing system is the point. `lang` is what makes it
-                     correct rather than decorative: it drives font matching and
-                     tells a screen reader which voice to use. -->
                 <span :lang="lang.code" class="lang-native">{{ lang.native }}</span>
                 <span v-if="lang.native !== lang.name" class="lang-roman">{{ lang.name }}</span>
               </span>

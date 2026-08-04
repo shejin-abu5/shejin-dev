@@ -203,23 +203,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!--
-        Reads as a rule closing the section header, and is also the surface the
-        page's ball lands on out of the hero — see composables/useScrollBall.ts.
-        It carries the margin the header block used to own, so the space below
-        the heading is unchanged.
-      -->
       <span ref="railRef" class="mb-20 md:block hidden h-px w-full bg-hair md:mb-28" aria-hidden="true" />
     </div>
 
     <div class="mx-auto max-w-[1320px] px-6 md:px-12 md:pt-0 pt-3">
-      <!--
-        One element, two presentations. Above lg it is the plain block the
-        sticky cards pin inside; below lg `.swipe-rail` turns it into the
-        scroll-snap container. The tail has to stay inside it either way — a
-        sticky card can only travel within its own containing block, which is
-        this, so moving the tail out would strand the last card again.
-      -->
       <div
         ref="deckRef"
         class="work-deck swipe-rail"
@@ -231,8 +218,6 @@ onBeforeUnmount(() => {
         @keydown.arrow-right.prevent="goTo(active + 1)"
       >
         <template v-for="(project, i) in cards" :key="project.title">
-          <!-- Marks the last card's flow position; the blur band watches this -->
-          <!-- to know when the deck has finished.                             -->
           <div v-if="i === cards.length - 1" data-stack-end aria-hidden="true" class="h-px w-full" />
 
           <article
@@ -241,7 +226,6 @@ onBeforeUnmount(() => {
             :style="{ '--index': i, zIndex: i + 1 }"
           >
             <div class="work-card__grid grid grid-cols-1 items-center gap-4 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-8">
-              <!-- Left rail: identity + summary -->
               <div class="reveal min-w-0 xl:max-w-[270px]">
                 <div class="flex items-center gap-2.5">
                   <span class="font-data text-[12px] text-steel">{{ String(i + 1).padStart(2, '0') }}</span>
@@ -255,11 +239,6 @@ onBeforeUnmount(() => {
                 <p class="mt-3 text-[13px] leading-relaxed text-steel">{{ project.summary }}</p>
               </div>
 
-              <!-- Hero: the height lives in .work-hero, not a Tailwind         -->
-              <!-- arbitrary value, because it is derived from --band rather     -->
-              <!-- than chosen — see the token block in the style tag. It is     -->
-              <!-- also what each card costs in scroll distance, so it doubles   -->
-              <!-- as the deck's pacing control.                                 -->
               <figure
                 class="work-hero order-first w-full overflow-hidden rounded-[12px] bg-paper-soft ring-1 ring-hair xl:order-none xl:w-auto xl:aspect-[3/2]"
               >
@@ -278,20 +257,10 @@ onBeforeUnmount(() => {
                 </div>
               </figure>
 
-              <!-- Right rail: stack + live link. Below lg it is the card's    -->
-              <!-- last grid row, which is the one that absorbs the height the  -->
-              <!-- rail stretches every card to — see .work-card__grid.         -->
               <div class="work-card__foot reveal min-w-0 xl:max-w-[230px] xl:justify-self-end xl:text-right">
                 <span class="block font-data text-[10px] uppercase tracking-[0.18em] text-steel">Stack</span>
                 <p class="mt-1.5 font-data text-[12px] leading-relaxed text-ink">{{ project.tech }}</p>
 
-                <!-- <span class="mt-8 block font-data text-[11px] uppercase tracking-[0.18em] text-steel">Link</span> -->
-                <!-- Host-only label on one line: a wrapped URL was reading as a -->
-                <!-- paragraph next to a two-line stack list. The full URL stays  -->
-                <!-- on the title so nothing is actually lost to the ellipsis.    -->
-                <!-- The indent is xl-only: it offsets the link against the       -->
-                <!-- right-aligned rail there, and below it left the link sitting -->
-                <!-- alone out of line with everything else in the card.          -->
                 <a
                   v-if="project.link"
                   :href="project.link.url"
@@ -309,12 +278,9 @@ onBeforeUnmount(() => {
           </article>
         </template>
 
-        <!-- Gives the final card room to pin — see .work-stack-tail. -->
         <div aria-hidden="true" class="work-stack-tail hidden xl:block" />
       </div>
 
-      <!-- Rail position. Labelled with each project rather than "slide 3 of  -->
-      <!-- 6" — the title is what a listener is actually choosing between.    -->
       <div class="swipe-dots">
         <button
           v-for="(project, i) in cards"
@@ -330,9 +296,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Progressive blur band pinned to the viewport bottom: cards rise up   -->
-    <!-- through it and sharpen as they clear it. Sticky + CSS only, so there -->
-    <!-- is no scroll listener and nothing to jitter.                         -->
     <div class="work-fade" :class="{ 'work-fade--out': stackEnded }" aria-hidden="true">
       <div class="work-fade__blur work-fade__blur--1" />
       <div class="work-fade__blur work-fade__blur--2" />
