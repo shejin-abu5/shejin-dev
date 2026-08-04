@@ -65,6 +65,35 @@ export interface Perch {
    * straight over five project cards.
    */
   side: boolean
+  /**
+   * Least fall between this perch's exit and the next perch's entry, as a
+   * fraction of viewport height. Null takes the ball's own default.
+   *
+   * A fall wants to be as long as the hop is big, and hops are not all the
+   * same size. Crossing from one section to the next is most of a screen and
+   * needs room; stepping from one card in a row to the card beside it is a
+   * couple of hundred pixels and does not. One global figure has to be sized
+   * for the crossing, and spending that on every step is how the tail of the
+   * page ran out of scroll: Education and Languages sit in a section barely
+   * half a viewport tall, and two crossing-sized falls plus two rolls wanted
+   * more than twice the scroll that section has.
+   *
+   * Set it where a section knows its next hop is a short one. The section
+   * cannot see its neighbour, but it can see how far the ball has to go.
+   */
+  fall: number | null
+  /**
+   * The ball's resting place: it lands here and hops on the spot for as long
+   * as the page stays put, instead of rolling on and falling out of frame.
+   *
+   * Only the last perch has any business setting this. It is the answer to
+   * "the page has run out, so what does the ball do now" — anywhere else it
+   * would simply strand the ball mid-journey.
+   *
+   * A resting perch does not roll, so `from`/`to` should be the same value:
+   * the point along the surface the ball bounces on.
+   */
+  bounce: boolean
 }
 
 type Fraction = number | (() => number)
@@ -91,6 +120,8 @@ export function registerPerch(spec: {
   progress?: () => number
   inset?: number
   side?: boolean
+  fall?: number
+  bounce?: boolean
 }): () => void {
   const perch: Perch = {
     surface: spec.surface,
@@ -99,7 +130,9 @@ export function registerPerch(spec: {
     to: asFn(spec.to, 1),
     progress: spec.progress,
     inset: spec.inset ?? 14,
-    side: spec.side ?? false
+    side: spec.side ?? false,
+    fall: spec.fall ?? null,
+    bounce: spec.bounce ?? false
   }
 
   ballPerches.list.push(perch)
@@ -135,6 +168,8 @@ export function useBallPerch(
     to?: Fraction
     inset?: number
     side?: boolean
+    fall?: number
+    bounce?: boolean
   }
 ) {
   if (!import.meta.client) return
@@ -164,7 +199,9 @@ export function useBallPerch(
         from: opts.from,
         to: opts.to,
         inset: opts.inset,
-        side: opts.side
+        side: opts.side,
+        fall: opts.fall,
+        bounce: opts.bounce
       })
 
       return () => {

@@ -57,7 +57,7 @@ const links = [
                dot, which reads as a stray bullet rather than as a status, and
                the row measures ~275px of the 350px a 390px screen has. -->
           <span class="font-data text-[11px] tracking-wide text-steel">
-            Open to relocation
+            Open to work
           </span>
         </div>
 

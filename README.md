@@ -73,7 +73,10 @@ Animation, Build tools, Developer tools, Version control, and Accessibility &
 localization (the last one isn't in the standard list but covers real,
 UAE-relevant CV content — RTL layouts and Arabic/English builds — that didn't
 fit anywhere else). No testing frameworks are listed because none are on the
-CV; the category was left out rather than padded.
+CV; the category was left out rather than padded. Each card's back carries six
+or more chips; where the CV's own skills block is thinner than that under a
+heading, the rest come from its other headings, the experience bullets, or
+practices the work demonstrates.
 
 **Featured Projects** are full case-study cards (screenshot placeholder,
 description, tech used, contribution, challenge, outcome) for the six
@@ -96,7 +99,7 @@ card shows "Live link not listed" instead of a link. If you have the real
 URLs, add them to the `featured` array in `ProjectsSection.vue`.
 
 **Contact** includes a working "Download CV" button (the uploaded PDF, copied
-to `public/files/Shejin-Abu-CV.pdf`) and a GitHub link. The GitHub URL wasn't
+to `public/files/Shejin-Abux1.pdf`) and a GitHub link. The GitHub URL wasn't
 provided, so it currently points to `#` with a `TODO` comment in
 `TheFooter.vue` — swap in the real profile URL.
 
