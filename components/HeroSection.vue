@@ -291,77 +291,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!--
-    Scroll spacer, and the one place the phone and the desktop differ. Its
-    height less one screen is the scrub window, so 300vh buys the desktop two
-    viewports of scrolling to get through the read and 170vh buys the phone
-    about two thirds of one. The heading is also physically shorter there, so
-    the ball of it moves faster per pixel of scroll as well as for less of it —
-    which is the point: on a phone this is the thing standing between a visitor
-    and the rest of the page.
-
-    Change the pace here and nowhere else. The timeline in <script> is one
-    block for both widths and reads its distance off the DOM.
-
-    Not a free number on the phone: the scrub now ends when the frame unsticks,
-    at `spacer − frame`, so with a 50svh frame 116vh buys ~555px of scrolling
-    against the heading's ~505px of travel. Shorten the spacer without
-    lengthening the frame and the heading has to hurry to finish.
-  -->
   <div ref="wrapRef" class="hero-scroll h-[116vh] md:h-[300vh]">
-    <!--
-      `position: sticky` does the pinning, not ScrollTrigger's `pin: true`.
-      Same approach the reference uses, and it keeps GSAP from injecting a
-      pin-spacer element into the DOM. `overflow-hidden` sits on the sticky
-      element itself — putting it on an ancestor would break sticky outright,
-      and it is also what clips the track's overflow into a frame.
-
-      No `pt` any more. The frame is a centred screen at every width now, so
-      the 130px that used to hold the heading clear of the fixed nav was
-      padding a box whose content is nowhere near the top of it — it just
-      pushed the composition down and left the gap above it. The bottom pad is
-      the whole of the vertical bias: `justify-center` centres in the content
-      box, so padding only at the foot lifts the heading off dead centre, which
-      is the same job `-translate-y-[6vh]` does above `md`.
-
-      On the phone it is a top pad instead, and it is clearing the fixed nav
-      rather than biasing anything — the frame there is now barely taller than
-      what it holds, so there is no longer a surplus to push around, only a
-      floor to keep the headline off. In px because that is what the nav is:
-      ~80px of bar that does not scale with the viewport, so a vh here would
-      leave the headline tucked under it on a short screen and floating on a
-      tall one.
-    -->
     <header
       class="hero-frame sticky top-0 flex h-screen flex-col justify-center overflow-hidden pt-[70px] md:pt-0"
     >
-      <!-- <p
-        class="hero-fade mb-7 flex items-center gap-2.5 px-5 font-data text-[13px] tracking-wide text-steel md:absolute md:left-0 md:top-[130px] md:mb-0 md:px-8"
-      >
-        <span class="h-[7px] w-[7px] rounded-full bg-accent" aria-hidden="true" />
-        DUBAI, UAE — UAE RESIDENCE VISA (EMPLOYED)
-      </p> -->
-
-      <!--
-        Lifted off dead centre. The frame is `justify-center`, which puts the
-        heading's optical middle below the viewport's — the slogan and the
-        wordmark both sit under it and pull the composition down. The transform
-        rather than padding: it moves the mark's rect, so the ball riding it
-        comes up with the heading instead of detaching from it.
-      -->
       <div class="hero-pad w-full px-5 md:-translate-y-[6vh] md:px-8">
-        <!--
-          Both copies of the heading occupy the same grid cell so they stack
-          pixel-for-pixel. `w-max` lets the row shrink-wrap its nowrap content
-          and grow past the viewport — that overflow is the thing the scroll
-          then travels through, and it is now what happens on a phone too.
-        -->
         <div ref="trackRef" class="hero-track relative grid w-max will-change-transform">
-          <!--
-            Rendered twice from one block of markup rather than written out
-            twice: the wipe only lines up while the two layers are identical,
-            and a single source makes drifting apart impossible.
-          -->
           <component
             :is="layer === 'ink' ? 'h1' : 'div'"
             v-for="layer in ['ghost', 'ink']"
@@ -378,26 +313,6 @@ onUnmounted(() => {
               <span class="hero-line block">Frontend</span>
             </span>
 
-            <!--
-              The punctuation between the two halves of the heading: a
-              hairline the page's ball rests on. The orange rotor that used to
-              sit above it is gone — the ball is that mark now, and it leaves
-              at the end of the hero rather than spinning in place. Sized in
-              `em` so it tracks the fluid heading, and `bg-current` means the
-              rule darkens along with the wipe. Hidden on mobile, where the
-              heading wraps and there is no row to punctuate.
-
-              Only the ink layer's rail is registered as a perch; the ghost
-              copy underneath is a pixel-for-pixel duplicate, so either would
-              give the same rect, and one of them has to win.
-
-              Shown on the phone now that the heading is a single nowrap row
-              there too — it is the punctuation between the two halves, and
-              there is a row to punctuate again. Wider in `vw` than the desktop
-              rule so it reads as a mark rather than a hyphen at 390px. The
-              ball is still desktop-only (BALL_QUERY), so down here this is
-              purely the rule.
-            -->
             <span
               class="hero-mark flex w-[14vw] shrink-0 flex-col justify-end md:w-[9vw]"
               aria-hidden="true"
@@ -422,13 +337,6 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!--
-        Mobile only. On desktop the hero is a pinned horizontal read that ends
-        on a screen of deliberate air, and a pair of buttons in it would be
-        clutter. On a phone there is no such read — the hero is a title card,
-        and without these the first way to make contact is the footer, ten
-        thousand pixels down. Verbs, not labels: each says what happens.
-      -->
       <div class="hero-cta mt-9 flex flex-wrap items-center gap-2.5 px-5 md:hidden">
         <a
           href="mailto:shejin.abu@gmail.com"
@@ -447,21 +355,8 @@ onUnmounted(() => {
     </header>
   </div>
 
-  <!--
-    The bio, out of the pinned frame's bottom corner and onto its own screen.
-    At 26–46px centred it is a statement rather than a caption, which is what
-    the scroll wipe needs to be worth doing — the effect is invisible on a
-    15px paragraph parked in a corner.
-  -->
   <section ref="introRef" class="hero-intro" aria-label="Introduction">
     <p class="hero-intro-copy">
-      <!--
-        One span per word, because the wipe brightens them individually. The
-        wrapper carries the accent class rather than the words carrying colour
-        inline, so the reveal's opacity and the segment's colour stay
-        independent — a highlighted word dims and brightens exactly like the
-        ink around it.
-      -->
       <span
         v-for="(item, i) in INTRO_WORDS"
         :key="`${i}-${item.word}`"
@@ -470,17 +365,6 @@ onUnmounted(() => {
       >{{ item.word }}</span>
     </p>
 
-    <!--
-      The reminder, moved out of the pinned frame's bottom corner to sit
-      centred under the bio it belongs with. It is the page's one line of
-      voice, and typing it out is the whole point — so it is set larger than
-      the 13px label it used to be, enough to read as a closing statement
-      without competing with the 26–46px paragraph above it.
-
-      The text is real and unclipped in the markup: the clip that hides it
-      before the type is set in JS, so a visitor without the animation gets
-      the finished line rather than an empty row.
-    -->
     <p ref="sloganRef" class="hero-slogan">
       <span class="hero-slogan-line">
         <span class="hero-slogan-ink"><span
