@@ -237,16 +237,20 @@ onBeforeUnmount(() => {
             <div class="work-card__grid grid grid-cols-1 items-center gap-8 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-10">
               <!-- Left rail: identity + summary -->
               <div class="reveal min-w-0 xl:max-w-[300px]">
+                <!-- The max-md: sizes are the phone's own scale. A card that
+                     is 322px wide is carrying type drawn for a 1224px one, and
+                     the title at 24px was taking three lines of a five-line
+                     card. -->
                 <div class="flex items-center gap-3">
-                  <span class="font-data text-[13px] text-steel">{{ String(i + 1).padStart(2, '0') }}</span>
-                  <span class="font-data text-[11px] uppercase tracking-[0.18em] text-accent-text">
+                  <span class="font-data text-[13px] text-steel max-md:text-[11px]">{{ String(i + 1).padStart(2, '0') }}</span>
+                  <span class="font-data text-[11px] uppercase tracking-[0.18em] text-accent-text max-md:text-[10px]">
                     {{ project.brand }}
                   </span>
                 </div>
-                <h3 class="mt-4 font-display text-2xl font-bold uppercase leading-tight tracking-tight md:text-[30px]">
+                <h3 class="mt-4 font-display text-2xl font-bold uppercase leading-tight tracking-tight max-md:mt-3 max-md:text-[19px] md:text-[30px]">
                   {{ project.title }}
                 </h3>
-                <p class="mt-4 text-[15px] leading-relaxed text-steel">{{ project.summary }}</p>
+                <p class="mt-4 text-[15px] leading-relaxed text-steel max-md:mt-3 max-md:text-[13.5px]">{{ project.summary }}</p>
               </div>
 
               <!-- Hero: the height lives in .work-hero, not a Tailwind         -->
@@ -277,8 +281,8 @@ onBeforeUnmount(() => {
               <!-- the link sit on one baseline across all six slides instead   -->
               <!-- of floating wherever the summary above them happens to end.  -->
               <div class="work-card__foot reveal min-w-0 xl:max-w-[260px] xl:justify-self-end xl:text-right">
-                <span class="block font-data text-[11px] uppercase tracking-[0.18em] text-steel">Stack</span>
-                <p class="mt-2 font-data text-[13px] leading-relaxed text-ink">{{ project.tech }}</p>
+                <span class="block font-data text-[11px] uppercase tracking-[0.18em] text-steel max-md:text-[10px]">Stack</span>
+                <p class="mt-2 font-data text-[13px] leading-relaxed text-ink max-md:text-[12px]">{{ project.tech }}</p>
 
                 <!-- <span class="mt-8 block font-data text-[11px] uppercase tracking-[0.18em] text-steel">Link</span> -->
                 <!-- Host-only label on one line: a wrapped URL was reading as a -->
@@ -293,7 +297,7 @@ onBeforeUnmount(() => {
                   :title="project.link.url"
                   target="_blank"
                   rel="noopener"
-                  class="mt-6 flex min-h-[44px] items-center gap-2 font-data text-[13px] text-ink underline underline-offset-4 transition-colors hover:text-ink/85 xl:mt-8 xl:min-h-0 xl:justify-end xl:pl-4"
+                  class="mt-6 flex min-h-[44px] items-center gap-2 font-data text-[13px] text-ink underline underline-offset-4 transition-colors hover:text-ink/85 max-md:mt-5 max-md:text-[12px] xl:mt-8 xl:min-h-0 xl:justify-end xl:pl-4"
                 >
                   <span class="min-w-0 truncate">{{ project.link.label }}</span>
                   <span class="shrink-0" aria-hidden="true">→</span>
@@ -502,6 +506,22 @@ section {
     margin-bottom: 0;
     display: flex;
     flex-direction: column;
+    /*
+      The hairline is in here rather than coming from the template's
+      `ring-1 ring-hair` because Tailwind implements a ring as a box-shadow —
+      so the `box-shadow: none` that unwinds the deck above was also erasing
+      the card's edge, and a paper card on paper with no edge and no shadow is
+      invisible. Stating both in one declaration is what keeps them from
+      cancelling each other again.
+
+      Kept light on purpose: enough to lift the card off the page and read as
+      a swipeable object, not enough to turn a flat editorial layout into a
+      row of floating tiles.
+    */
+    box-shadow:
+      inset 0 0 0 1px theme('colors.hair'),
+      0 1px 2px rgb(18 18 18 / 0.04),
+      0 10px 24px -14px rgb(18 18 18 / 0.18);
   }
 
   /* Cards are stretched to a common height by the rail, so the slack has to
