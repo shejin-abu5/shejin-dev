@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Everything below is global/document-level CSS that Tailwind has no utility
+  class for, so it can't reasonably live as a per-element class. Each rule is
+  commented with why it's here. Component-level styling should stay in
+  component files as Tailwind utility classes.
+*/
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-paper text-ink font-body antialiased;
+}
+
+/* Tailwind has no `selection:` variant that applies globally without adding
+   a class to every element, so this stays as plain CSS. */
+::selection {
+  @apply bg-accent text-white;
+}
+
+/* Global focus ring for keyboard navigation (WCAG 2.4.7). Using `theme()`
+   here (rather than duplicating `focus-visible:outline-accent` on every
+   interactive element) keeps this consistent app-wide from one place. */
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid theme('colors.accent');
+  outline-offset: 3px;
+}
+
+/* Keyframes referenced by MarqueeBand.vue via Tailwind's arbitrary-value
+   syntax: `animate-[scroll-left_32s_linear_infinite]`. Tailwind has no
+   built-in marquee/scroll animation, so the keyframes must be defined
+   somewhere; the animation itself is still applied as a Tailwind utility
+   class, and respects prefers-reduced-motion via `motion-reduce:animate-none`
+   in the component, not a separate override here. */
+@keyframes scroll-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ------------------------------------------------------------ swipe rails */
+
+/*
+  Projects and Experience both present as a swipeable rail below `lg`, which
+  is where the deck's sticky stacking and the chart's pinned scrub are both
+  switched off — the same line as BALL_QUERY in composables/useScrollBall.ts.
+  Above it these classes do nothing and the sections lay themselves out.
+
+  Plain CSS scroll-snap: the OS owns the momentum and the rubber-band, so
+  there is no inertia to reimplement and nothing that can disagree with the
+  platform's own feel. The only JS is an IntersectionObserver reading which
+  slide holds the frame — see composables/useSwipeRail.ts.
+
+  Here rather than in either component because both use it and neither owns
+  it; two scoped stylesheets can't share a rule without one importing the
+  other. The dots are hidden by default so that the >lg and reduced-motion
+  paths, which render the same markup as a list, don't show a control for a
+  rail that isn't there.
+*/
+.swipe-dots {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .swipe-rail {
+    /* Set by each section to match its own container, so the first card
+       starts on the same left margin as the heading above it. */
+    --rail-gutter: 1.5rem;
+    /* How much of the next card shows — the affordance that says "swipe"
+       without spending an arrow on it. */
+    --rail-peek: 2.75rem;
+    /* Slide width. A section whose card would letterbox once the viewport
+       gets wide caps this; the default fills the frame less one peek. */
+    --rail-item: calc(100% - var(--rail-peek));
+
+    /* Slides resolve offsetLeft against this, which is what useSwipeRail's
+       goTo() measures with. */
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    gap: 0.875rem;
+    /* Full-bleed: cancel the container's gutter so cards can travel to the
+       screen edge, then restore it as padding so the first one still lines
+       up with the page's margin. */
+    margin-inline: calc(var(--rail-gutter) * -1);
+    padding-left: var(--rail-gutter);
+    overflow-x: auto;
+    /* Stops a horizontal fling from turning into a back-navigation gesture,
+       and a vertical overscroll from bouncing the page behind the rail. */
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: var(--rail-gutter);
+    -webkit-overflow-scrolling: touch;
+    /* The rail is a touch surface with dots under it; a scrollbar sitting
+       across the bottom of a card is noise. */
+    scrollbar-width: none;
+  }
+
+  .swipe-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .swipe-rail > * {
+    flex: 0 0 var(--rail-item);
+    scroll-snap-align: start;
+  }
+
+  /*
+    Load-bearing. The scrollable range is (content − viewport), which runs
+    short of the distance needed to bring the last card to the snap line by
+    exactly the width of the frame the last card does not fill. A mandatory
+    snap point the container cannot reach is what leaves a final card hanging
+    part-way through the gesture.
+
+    `100%` is the rail's content box, so `100% - --rail-item` is that
+    shortfall directly. For an uncapped rail it works out at one peek, which
+    is what this was before slide width became a variable; the max() is what
+    keeps the arithmetic true once a section caps its cards and the shortfall
+    grows past a peek.
+  */
+  .swipe-rail::after {
+    content: '';
+    flex: 0 0 max(var(--rail-peek), calc(100% - var(--rail-item)));
+  }
+
+  .swipe-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-top: 1.5rem;
+  }
+
+  /* The mark people see is the span; the target their thumb gets is the
+     button around it. Sizing the dot itself to 44px would read as a row of
+     bullets rather than a position indicator.
+
+     Shrinkable on the width axis only: nine dots at a full 44px overrun a
+     390px screen, and a wrapped second row of dots reads as a second rail.
+     They give up width rather than the 44px of height, and the floor keeps
+     them well clear of the 24px minimum even on the longest rail. */
+  .swipe-dot {
+    display: grid;
+    place-items: center;
+    height: 44px;
+    flex: 0 1 44px;
+    min-width: 30px;
+    border-radius: 9999px;
+  }
+
+  .swipe-dot > span {
+    height: 7px;
+    width: 7px;
+    border-radius: 9999px;
+    background: theme('colors.hair');
+    transition: background-color 220ms ease, transform 220ms ease;
+  }
+
+  .swipe-dot[aria-current] > span {
+    background: theme('colors.accent');
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .swipe-dot > span {
+    transition: none;
+  }
+}
