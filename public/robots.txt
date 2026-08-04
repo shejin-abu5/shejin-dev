@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://shejinabu.dev/sitemap.xml
+Sitemap: https://shejin-dev.vercel.app/sitemap.xml

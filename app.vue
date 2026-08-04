@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const siteUrl = 'https://shejinabu.dev'
+const siteUrl = useRuntimeConfig().public.siteUrl
 const title = 'Shejin Abu — Senior Frontend / UI Developer in Dubai, UAE'
 const description =
   "Frontend / UI Developer in Dubai working in Vue.js and React.js. 10+ years shipping automotive and enterprise platforms across the Middle East and Africa, including the Vue.js CMS component library built for Nissan and Ford's regional sites."
@@ -15,18 +15,19 @@ useSeoMeta({
   ogTitle: title,
   ogDescription: description,
   ogUrl: siteUrl,
-  ogImage: `${siteUrl}/og-image.jpg`,
+  ogImage: `${siteUrl}/og-image.png`,
   ogImageAlt: 'Shejin Abu — Senior Frontend / UI Developer, Dubai',
   ogSiteName: 'Shejin Abu — Portfolio',
   twitterCard: 'summary_large_image',
   twitterTitle: title,
   twitterDescription: description,
-  twitterImage: `${siteUrl}/og-image.jpg`
+  twitterImage: `${siteUrl}/og-image.png`
 })
 
 // JSON-LD structured data — helps search engines understand this as a
 // Person / professional profile rather than generic marketing copy.
 useHead({
+  link: [{ rel: 'canonical', href: `${siteUrl}/` }],
   script: [
     {
       type: 'application/ld+json',
@@ -36,7 +37,7 @@ useHead({
         name: 'Shejin Abu',
         jobTitle: 'Senior Frontend / UI Developer',
         url: siteUrl,
-        image: `${siteUrl}/og-image.jpg`,
+        image: `${siteUrl}/og-image.png`,
         email: 'mailto:shejin.abu@gmail.com',
         telephone: '+971-56-383-4835',
         address: {

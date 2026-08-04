@@ -7,10 +7,11 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   // Site URL used to build canonical / OG absolute URLs.
-  // Replace with the real production domain once deployed.
+  // Override per-environment with the NUXT_PUBLIC_SITE_URL env var — set it in
+  // Vercel's project settings when a custom domain is attached.
   runtimeConfig: {
     public: {
-      siteUrl: 'https://shejinabu.dev'
+      siteUrl: 'https://shejin-dev.vercel.app'
     }
   },
 
@@ -27,8 +28,8 @@ export default defineNuxtConfig({
           rel: 'stylesheet',
           href: 'https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap'
         },
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-        { rel: 'canonical', href: 'https://shejinabu.dev/' }
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }
+        // Canonical lives in app.vue so it can read the runtime siteUrl.
       ]
     }
   },
