@@ -52,12 +52,8 @@ worse.
 - `::after` spacer equal to one peek. Without it the scroll range runs one peek
   short of the last card's snap line, and an unreachable mandatory snap point
   is what leaves a final card hanging mid-gesture.
-- Dots are `<button>`s with a 32×36 hit area around a 7px mark, labelled with
-  the card's own title rather than "slide 3". Started at 44×44 with a 24px
-  margin; the padding around the mark was then most of what the row was, so it
-  read as a spaced-out line of its own rather than a caption on the card, and
-  cost ~68px of phone height on each of three rails. 50px now, and still clear
-  of the 24px minimum on both axes.
+- Dots are `<button>`s with a 44px hit area around a 7px mark, labelled with
+  the card's own title rather than "slide 3".
 
 Switches at **1024px** for both sections — the same line as `BALL_QUERY`, so
 there is one breakpoint to reason about.

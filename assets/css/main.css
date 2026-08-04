@@ -135,29 +135,29 @@ button:focus-visible {
   .swipe-dots {
     display: flex;
     justify-content: center;
-    gap: 0.125rem;
-    margin-top: 0.875rem;
+    gap: 0;
+    margin-top: 1.25rem;
   }
 
   /* The mark people see is the span; the target their thumb gets is the
-     button around it. Sizing the dot itself to a full target would read as a
-     row of bullets rather than a position indicator.
+     button around it. Sizing the dot itself to 44px would read as a row of
+     bullets rather than a position indicator.
 
-     32×36 rather than 44×44. At 44 the padding around a 7px mark was most of
-     what the row was — the dots read as a widely spaced line of their own
-     under the card instead of as a caption on it, and the block cost ~68px of
-     a phone's height on every one of the three rails. This clears the 24px
-     minimum on both axes with room to spare.
+     The button's width, not `gap`, is what sets the space between the marks —
+     the gap only adds to whatever the buttons already leave around their 7px
+     spans, so tightening the row means narrowing these.
 
-     Shrinkable on the width axis only, because the Skills rail carries nine:
-     they give up width before height, and a wrapped second row of dots would
-     read as a second rail. */
+     24px is the floor and the row now sits on it: WCAG 2.2's minimum target
+     is 24x24, and with `gap: 0` these are edge to edge, so nothing overlaps
+     and each one still clears it. The 44px of height is what keeps them
+     comfortable to hit; it is the width that gives, which is also why nine
+     dots still fit a 390px screen without wrapping to a second row that
+     would read as a second rail. */
   .swipe-dot {
     display: grid;
     place-items: center;
-    height: 36px;
-    flex: 0 1 32px;
-    min-width: 26px;
+    height: 44px;
+    flex: 0 0 24px;
     border-radius: 9999px;
   }
 
@@ -170,7 +170,7 @@ button:focus-visible {
   }
 
   .swipe-dot[aria-current] > span {
-    background: theme('colors.accent');
+    background: theme('colors.ink');
     transform: scale(1.35);
   }
 }

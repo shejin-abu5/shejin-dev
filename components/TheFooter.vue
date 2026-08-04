@@ -1,7 +1,47 @@
 <script setup lang="ts">
 import { gsap } from 'gsap'
+import { useBallPerch } from '~/composables/useScrollBall'
 
 const footerRef = ref<HTMLElement | null>(null)
+const restRef = ref<HTMLElement | null>(null)
+
+// Where the page's ball ends up: it falls the length of the footer, lands on
+// the rule above the contact block and hops there for as long as the page
+// stays put, instead of dropping out of the frame and leaving the last screen
+// of the site with nothing on it. Scrolling back up takes it off this perch
+// and into the fall from Languages, unwound exactly as it came.
+//
+// This rule rather than the footer's top edge. The top edge is the wrong
+// surface for a *resting* ball for the same reason it is the right one for a
+// falling one: a footer taller than the viewport carries it up out of the
+// frame — and under the nav — well before the document runs out, so the ball
+// would come to rest somewhere it cannot be seen. This rule sits a couple of
+// hundred px above the end of the document, which is to say it is still in
+// frame, near the bottom, at every scroll position from which it is reachable
+// at all.
+//
+// `from` and `to` are equal because a resting ball does not roll. It lands
+// dead centre and stays there.
+useBallPerch(() => restRef.value, {
+  // Triggered off the footer's own bottom rather than off the rule, and in
+  // viewport-independent terms: 150px before the document runs out, whatever
+  // the viewport is — which puts the rule just inside the bottom of the frame
+  // as the ball arrives, and 150px further up by the time the page stops.
+  //
+  // Anchoring to the rule instead would mean a start expressed as a fraction
+  // of viewport height, and the rule is only ~210px clear of the document
+  // bottom: on a tall viewport any such fraction resolves past the end of the
+  // page, and a perch the scroll cannot reach is a ball that never lands.
+  trigger: () => footerRef.value,
+  start: 'bottom bottom+=150',
+  // Well past the end of the document, on purpose. This perch has no exit:
+  // the ball is meant to still be on it when the page runs out, so the window
+  // has to outlast the scroll rather than hand over to anything.
+  end: '+=4000',
+  from: 0.5,
+  to: 0.5,
+  bounce: true
+})
 
 onMounted(() => {
   if (!import.meta.client || !footerRef.value) return
@@ -47,15 +87,20 @@ onMounted(() => {
         </a>
 
         <a
-          href="/files/Shejin-Abu-CV.pdf"
-          download
+          href="/files/Shejin-Abux1.pdf"
+          download="Shejin-Abu-CV.pdf"
           class="inline-flex items-center gap-2 rounded-full bg-paper px-5 py-2.5 font-data text-[13px] text-ink transition-colors hover:bg-accent-text hover:text-white"
         >
           Download CV
         </a>
       </div>
 
-      <div class="mt-24 flex flex-wrap items-end justify-between gap-6 border-t border-white/15 pt-8">
+      <!-- Its top border is where the page's ball comes to rest — see the
+           perch registered above. -->
+      <div
+        ref="restRef"
+        class="mt-24 flex flex-wrap items-end justify-between gap-6 border-t border-white/15 pt-8"
+      >
         <div class="flex flex-wrap gap-10">
           <div class="text-xs uppercase tracking-wide text-white/50">
             Location

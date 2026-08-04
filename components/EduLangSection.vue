@@ -44,38 +44,58 @@ function setLangRail(el: unknown, i: number) {
   if (i === LANGUAGES.length - 1) langRailRef.value = (el as HTMLElement | null) ?? null
 }
 
-// The ball's last two perches. Both are real hairlines already in the layout —
-// the rule under Education's eyebrow, and the `border-top` on Languages' last
-// row — rather than rules added for it. Education's rule and Languages' *last*
-// row: same-height surfaces would give the ball a flat sideways hop with no
-// fall in it, and the two-row offset between the columns is exactly the drop
-// that beat needs. Both cards open with the same eyebrow block, so Education's
-// rule and Languages' first row-border sit at the same y — the drop is two
-// language rows, and nothing else.
-// Half-width rows, so half the window the full-width rules get — same pace
+// The ball's last two rolling perches: the top edge of Education's body block,
+// and Languages' *last* row. Two surfaces at the same height would give the
+// ball a flat sideways hop with no fall in it, and the two-row offset between
+// the columns is exactly the drop that beat needs.
+//
+// Half-width cards, so half the window the full-width rules get — same pace
 // across the page. Languages picks up where Education leaves off, with no
 // overlap between the two.
+// Both windows are struck against the *section* top, but the surfaces sit well
+// inside it — the body block 206px down, Languages' last row 325px — so the
+// percentages here read lower than where the ball actually lands. 58% puts the
+// body edge at about three quarters of the frame: in view and clear of the
+// bottom fade band, rather than the 74% it used to say, which put it at the
+// very bottom edge and had the ball arriving at half strength.
 useBallPerch(() => eduRailRef.value, {
   trigger: () => sectionRef.value,
-  // Starts once the row is properly in frame, not while it is still down in
-  // the bottom fade band — landing there means arriving at 20% opacity and
-  // brightening in place, which reads as the ball blinking rather than
-  // touching down.
-  start: 'top 74%',
-  end: 'top 40%',
-  from: 0.08,
-  to: 0.82
+  start: 'top 58%',
+  end: 'top 32%',
+  // The window is the pace. Both cards give the ball rather less than their
+  // full width to cross, so it travels at about six tenths of what the page
+  // does — an amble rather than a dash.
+  from: 0.1,
+  to: 0.65,
+  // A short fall, because it is a short hop: one card to the card beside it,
+  // a couple of hundred px across and two language rows down. The default is
+  // sized for crossing between sections and would spend more scroll on this
+  // step than this section has to give.
+  fall: 0.16
 })
 
-// This is the last perch on the page, and the page runs out shortly after it —
-// so the window has to sit where the row is still in frame. Pushed any later
-// and the ball spends its final roll riding a rail that has already scrolled
-// out the top, which is not a roll anyone sees.
+// The last rolling perch on the page — the footer takes the ball from here.
+// The window has to sit where the row is still in frame: pushed any later and
+// the ball spends its final roll riding a row that has already scrolled out
+// the top, which is not a roll anyone sees.
+//
+// This is also the window that gives way when the tail of the page runs short.
+// Everything from here to the footer's resting rule has to fit between the
+// section arriving and the document ending, and on a tall viewport that whole
+// stretch is only a couple of hundred px — the section and the footer very
+// nearly fit on one screen together. The footer's perch cannot move (there is
+// no page left to move it into), so the ball's resolver takes the shortfall
+// out of this roll. It ends up brisk on a tall viewport and unhurried on a
+// normal one, which is the right way round: a tall viewport is showing most of
+// the section already.
 useBallPerch(() => langRailRef.value, {
   trigger: () => sectionRef.value,
-  start: 'top 14%',
-  end: 'top -24%',
-  to: 0.82
+  start: 'top 22%',
+  end: 'top -8%',
+  to: 0.63,
+  // The fall from here is the length of the footer, so it is long in px
+  // whatever this says; the figure only has to stop the two windows meeting.
+  fall: 0.1
 })
 
 onMounted(() => {
@@ -84,7 +104,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section ref="sectionRef" class="py-24 md:py-[120px]">
+  <section ref="sectionRef" class="py-12 md:py-[120px]">
     <!--
       Narrower than the 1240px every other section runs at. Two cards holding a
       degree and three languages do not need the full measure, and pulling them
@@ -100,12 +120,19 @@ onMounted(() => {
           </svg>
 
 
-          <!-- A real hairline, and the surface the page's ball lands on. It
-               sits at the same y as Languages' first row-border, which is what
-               makes the fall between the two columns exactly two rows. -->
-          <span ref="eduRailRef" class="edu-rail" aria-hidden="true" />
+          <!-- Its top edge is the surface the page's ball lands on. There used
+               to be a hairline span here for that, but it was styled
+               `display: none` when the eyebrow above it went — and a hidden
+               element has no rect, so the ball was being placed at the origin
+               of a 0×0 box: the top-left corner of the viewport, a screen and
+               a half from where the section is. Anchoring to a box that is
+               actually laid out is what makes the landing real, and this one
+               is at the exact y the hairline was.
 
-          <div class="edu-body">
+               Both cards open with the same icon block, so this sits at the
+               same y as Languages' first row — which is what makes the fall
+               between the two columns exactly two rows. -->
+          <div ref="eduRailRef" class="edu-body">
             <!-- One degree is one fact. Splitting it across two rows to match
                  the column beside it was padding, not structure. -->
             <h3 class="edu-degree">BCA in Computer Science</h3>
@@ -197,12 +224,6 @@ onMounted(() => {
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: theme('colors.steel');
-}
-
-.edu-rail {
-  height: 1px;
-  background: theme('colors.hair');
-  display: none;
 }
 
 .edu-body {
