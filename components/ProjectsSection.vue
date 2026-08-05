@@ -27,8 +27,8 @@ const projects: Project[] = [
     summary:
       'Launch platform for the new Nissan Patrol across Middle East and Africa markets. Built the frontend from Figma designs and the GSAP/WebGL launch animation.',
     tech: 'Vue.js · GSAP · WebGL',
-    demoUrl: 'https://allnewpatrol.nissan-dubai.com',
-    liveUrl: null,
+    demoUrl: null,
+    liveUrl: 'https://en.allnewpatrol.nissan-dubai.com/',
     demoLabel: 'allnewpatrol.nissan-dubai.com',
     image: newPatrolImg
   },
