@@ -2,12 +2,12 @@
 import { useReveal } from '~/composables/useReveal'
 import { useBallPerch } from '~/composables/useScrollBall'
 import { useSwipeRail } from '~/composables/useSwipeRail'
-import newPatrolImg from '~/assets/img/works/new-patrol.png'
-import partsImg from '~/assets/img/works/Genuine-Nissan-Parts-GHANA.png'
-import magniteImg from '~/assets/img/works/magnite.png'
-import infinitiImg from '~/assets/img/works/infiniti.png'
-import petrominImg from '~/assets/img/works/Nissan-KSA-Petromin.png'
-import smartImg from '~/assets/img/works/smart.png'
+import newPatrolImg from '~/assets/img/works/new-patrol.webp'
+import partsImg from '~/assets/img/works/Genuine-Nissan-Parts-GHANA.webp'
+import magniteImg from '~/assets/img/works/magnite.webp'
+import infinitiImg from '~/assets/img/works/infiniti.webp'
+import petrominImg from '~/assets/img/works/Nissan-KSA-Petromin.webp'
+import smartImg from '~/assets/img/works/smart.webp'
 
 interface Project {
   brand: string
