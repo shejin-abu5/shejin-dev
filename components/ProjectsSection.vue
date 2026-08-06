@@ -27,8 +27,8 @@ const projects: Project[] = [
     summary:
       'Launch platform for the new Nissan Patrol across Middle East and Africa markets. Built the frontend from Figma designs and the GSAP/WebGL launch animation.',
     tech: 'Vue.js · GSAP · WebGL',
-    demoUrl: 'https://allnewpatrol.nissan-dubai.com',
-    liveUrl: null,
+    demoUrl: null,
+    liveUrl: 'https://en.allnewpatrol.nissan-dubai.com/',
     demoLabel: 'allnewpatrol.nissan-dubai.com',
     image: newPatrolImg
   },
@@ -138,6 +138,11 @@ useBallPerch(() => railRef.value, {
   trigger: () => railRef.value,
   start: 'top 106%',
   end: 'top 2%',
+  // Stops short of the rule's right-hand end. The window here is already a
+  // whole viewport of scroll and cannot grow — the rule leaves the frame —
+  // so the only way to take the pace down is to give the ball less of the
+  // rule to cross in it.
+  to: 0.72,
   side: true
 })
 
@@ -185,7 +190,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section id="work" ref="sectionRef" class="relative py-28 md:py-[160px]">
+  <section id="work" ref="sectionRef" class="relative py-12 md:py-[160px]">
     <div class="mx-auto max-w-[1320px] px-6 md:px-12">
       <div class="reveal mb-9 flex flex-wrap items-end justify-between gap-6 md:mb-11">
         <div>
@@ -198,23 +203,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!--
-        Reads as a rule closing the section header, and is also the surface the
-        page's ball lands on out of the hero — see composables/useScrollBall.ts.
-        It carries the margin the header block used to own, so the space below
-        the heading is unchanged.
-      -->
-      <span ref="railRef" class="mb-20 block h-px w-full bg-hair md:mb-28" aria-hidden="true" />
+      <span ref="railRef" class="mb-20 md:block hidden h-px w-full bg-hair md:mb-28" aria-hidden="true" />
     </div>
 
-    <div class="mx-auto max-w-[1320px] px-6 md:px-12">
-      <!--
-        One element, two presentations. Above lg it is the plain block the
-        sticky cards pin inside; below lg `.swipe-rail` turns it into the
-        scroll-snap container. The tail has to stay inside it either way — a
-        sticky card can only travel within its own containing block, which is
-        this, so moving the tail out would strand the last card again.
-      -->
+    <div class="mx-auto max-w-[1320px] px-6 md:px-12 md:pt-0 pt-3">
       <div
         ref="deckRef"
         class="work-deck swipe-rail"
@@ -226,36 +218,29 @@ onBeforeUnmount(() => {
         @keydown.arrow-right.prevent="goTo(active + 1)"
       >
         <template v-for="(project, i) in cards" :key="project.title">
-          <!-- Marks the last card's flow position; the blur band watches this -->
-          <!-- to know when the deck has finished.                             -->
           <div v-if="i === cards.length - 1" data-stack-end aria-hidden="true" class="h-px w-full" />
 
           <article
-            class="work-card rounded-[20px] bg-paper px-6 py-8 ring-1 ring-hair md:rounded-[28px] md:px-10 md:py-9"
+            class="work-card rounded-[16px] bg-paper px-5 py-6 ring-1 ring-hair md:rounded-[22px] md:px-8 md:py-7"
+            :class="{ 'work-card--peek': isRail && active !== i }"
             :style="{ '--index': i, zIndex: i + 1 }"
           >
-            <div class="work-card__grid grid grid-cols-1 items-center gap-8 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-10">
-              <!-- Left rail: identity + summary -->
-              <div class="reveal min-w-0 xl:max-w-[300px]">
-                <div class="flex items-center gap-3">
-                  <span class="font-data text-[13px] text-steel">{{ String(i + 1).padStart(2, '0') }}</span>
-                  <span class="font-data text-[11px] uppercase tracking-[0.18em] text-accent-text">
+            <div class="work-card__grid grid grid-cols-1 items-center gap-4 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-8">
+              <div class="reveal min-w-0 xl:max-w-[270px]">
+                <div class="flex items-center gap-2.5">
+                  <span class="font-data text-[12px] text-steel">{{ String(i + 1).padStart(2, '0') }}</span>
+                  <span class="font-data text-[10px] uppercase tracking-[0.18em] text-accent-text">
                     {{ project.brand }}
                   </span>
                 </div>
-                <h3 class="mt-4 font-display text-2xl font-bold uppercase leading-tight tracking-tight md:text-[30px]">
+                <h3 class="mt-3 font-display md:text-xl text-lg font-bold uppercase leading-tight tracking-tight md:text-[25px]">
                   {{ project.title }}
                 </h3>
-                <p class="mt-4 text-[15px] leading-relaxed text-steel">{{ project.summary }}</p>
+                <p class="mt-3 text-[13px] leading-relaxed text-steel">{{ project.summary }}</p>
               </div>
 
-              <!-- Hero: the height lives in .work-hero, not a Tailwind         -->
-              <!-- arbitrary value, because it is derived from --band rather     -->
-              <!-- than chosen — see the token block in the style tag. It is     -->
-              <!-- also what each card costs in scroll distance, so it doubles   -->
-              <!-- as the deck's pacing control.                                 -->
               <figure
-                class="work-hero order-first w-full overflow-hidden rounded-[16px] bg-paper-soft ring-1 ring-hair xl:order-none xl:w-auto xl:aspect-[3/2]"
+                class="work-hero order-first w-full overflow-hidden rounded-[12px] bg-paper-soft ring-1 ring-hair xl:order-none xl:w-auto xl:aspect-[3/2]"
               >
                 <img
                   v-if="project.image"
@@ -266,50 +251,36 @@ onBeforeUnmount(() => {
                 />
                 <div
                   v-else
-                  class="flex h-full w-full items-center justify-center py-20 font-data text-xs uppercase tracking-wide text-steel"
+                  class="flex h-full w-full items-center justify-center py-16 font-data text-[11px] uppercase tracking-wide text-steel"
                 >
                  coming soon
                 </div>
               </figure>
 
-              <!-- Right rail: stack + live link. Below lg this is the card's  -->
-              <!-- foot: the grid's last row takes the slack, so the stack and  -->
-              <!-- the link sit on one baseline across all six slides instead   -->
-              <!-- of floating wherever the summary above them happens to end.  -->
-              <div class="work-card__foot reveal min-w-0 xl:max-w-[260px] xl:justify-self-end xl:text-right">
-                <span class="block font-data text-[11px] uppercase tracking-[0.18em] text-steel">Stack</span>
-                <p class="mt-2 font-data text-[13px] leading-relaxed text-ink">{{ project.tech }}</p>
+              <div class="work-card__foot reveal min-w-0 xl:max-w-[230px] xl:justify-self-end xl:text-right">
+                <span class="block font-data text-[10px] uppercase tracking-[0.18em] text-steel">Stack</span>
+                <p class="mt-1.5 font-data text-[12px] leading-relaxed text-ink">{{ project.tech }}</p>
 
-                <!-- <span class="mt-8 block font-data text-[11px] uppercase tracking-[0.18em] text-steel">Link</span> -->
-                <!-- Host-only label on one line: a wrapped URL was reading as a -->
-                <!-- paragraph next to a two-line stack list. The full URL stays  -->
-                <!-- on the title so nothing is actually lost to the ellipsis.    -->
-                <!-- The indent is xl-only: it offsets the link against the       -->
-                <!-- right-aligned rail there, and below it left the link sitting -->
-                <!-- alone out of line with everything else in the card.          -->
                 <a
                   v-if="project.link"
                   :href="project.link.url"
                   :title="project.link.url"
                   target="_blank"
                   rel="noopener"
-                  class="mt-6 flex min-h-[44px] items-center gap-2 font-data text-[13px] text-ink underline underline-offset-4 transition-colors hover:text-ink/85 xl:mt-8 xl:min-h-0 xl:justify-end xl:pl-4"
+                  class="mt-4 flex min-h-[44px] items-center gap-2 font-data text-[12px] text-ink underline underline-offset-4 transition-colors hover:text-ink/85 xl:mt-6 xl:min-h-0 xl:justify-end xl:pl-4"
                 >
                   <span class="min-w-0 truncate">{{ project.link.label }}</span>
                   <span class="shrink-0" aria-hidden="true">→</span>
                 </a>
-                <p v-else class="mt-2 font-data text-[13px] text-steel">Not listed</p>
+                <p v-else class="mt-2 font-data text-[12px] text-steel">Not listed</p>
               </div>
             </div>
           </article>
         </template>
 
-        <!-- Gives the final card room to pin — see .work-stack-tail. -->
         <div aria-hidden="true" class="work-stack-tail hidden xl:block" />
       </div>
 
-      <!-- Rail position. Labelled with each project rather than "slide 3 of  -->
-      <!-- 6" — the title is what a listener is actually choosing between.    -->
       <div class="swipe-dots">
         <button
           v-for="(project, i) in cards"
@@ -325,9 +296,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Progressive blur band pinned to the viewport bottom: cards rise up   -->
-    <!-- through it and sharpen as they clear it. Sticky + CSS only, so there -->
-    <!-- is no scroll listener and nothing to jitter.                         -->
     <div class="work-fade" :class="{ 'work-fade--out': stackEnded }" aria-hidden="true">
       <div class="work-fade__blur work-fade__blur--1" />
       <div class="work-fade__blur work-fade__blur--2" />
@@ -355,7 +323,7 @@ section {
 
   /* The hero has to be derived, not chosen, once the insets are symmetric.
      Budget: viewport, less both insets, less the 40px the last card sits
-     below the first, less the card's 72px of vertical padding, less 24px so
+     below the first, less the card's 56px of vertical padding, less 24px so
      that card clears the band instead of grazing it. Capped for tall screens.
 
      Picking a flat 44vh instead fits only above ~930px of viewport height; at
@@ -366,7 +334,7 @@ section {
      unusable anyway; it is there because a negative height is an invalid
      value, and the fallback to `auto` collapses a figure whose width and
      aspect-ratio are both derived from it. */
-  --hero: max(180px, min(415px, calc(100vh - 2 * var(--band) - 136px)));
+  --hero: max(180px, min(370px, calc(100vh - 2 * var(--band) - 120px)));
 }
 
 /* Cards pile into a deck, each offset 10px below the previous one so the
@@ -383,7 +351,14 @@ section {
   position: sticky;
   top: calc(var(--band) + var(--index) * 10px);
   margin-bottom: 5vh;
-  box-shadow: 0 -18px 50px -28px rgba(18, 18, 18, 0.35);
+  /* Two layers, because one can't do both jobs at this weight. The first is
+     the deck's: cast upward, off the top edge, so a card reads as a sheet
+     lying over the one it covers. The second is ambient — a short, soft seat
+     all round, which is what actually makes the shadow visible against white
+     once the cast layer is light enough not to look heavy. */
+  box-shadow:
+    0 -14px 36px -24px rgba(18, 18, 18, 0.24),
+    0 2px 12px -4px rgba(18, 18, 18, 0.08);
 }
 
 /* Height-driven so the 3:2 screenshot is never cropped; the width follows.
@@ -404,7 +379,7 @@ section {
    which is exactly the scroll distance the other cards each hold for. */
 .work-stack-tail {
   /* One card: the hero plus the card's vertical padding. */
-  height: calc(var(--hero) + 72px);
+  height: calc(var(--hero) + 56px);
 }
 
 .work-fade {
@@ -478,7 +453,12 @@ section {
   .work-card {
     position: static;
     margin-bottom: 2.5rem;
-    box-shadow: none;
+    /* Nothing to lift off here — the cards sit side by side rather than over
+       one another — so only the ambient half of the deck's shadow, which is
+       the half that has to carry it on its own. */
+    box-shadow:
+      0 4px 18px -6px rgba(18, 18, 18, 0.1),
+      0 1px 4px -1px rgba(18, 18, 18, 0.06);
   }
 
   .work-fade {
@@ -493,7 +473,15 @@ section {
   .work-deck {
     /* Matches the container's px-6, so the first card starts on the same
        margin as the heading over it. */
+    padding-bottom: 1.5rem;
     --rail-gutter: 1.5rem;
+    /* The card takes 85% of the frame and the cut next to it gets the other
+       15% — the two are the same number, since --rail-item is derived as
+       100% - --rail-peek, so a slide can only be widened by taking it out of
+       the peek. A percentage rather than a rem keeps that split fixed at
+       every width. The 0.875rem gap comes out of the visible cut, so what
+       actually shows of the next card is 15% less about 14px. */
+    --rail-peek: 15%;
   }
 
   .work-card {
@@ -504,22 +492,46 @@ section {
     flex-direction: column;
   }
 
+  /* Every card but the one holding the frame — in practice the half-cut one
+     at the edge, since it is the only other one on screen. Held back far
+     enough to sit behind the card you are reading and no further: the peek
+     has to stay legible as a card, because looking like the next one is what
+     makes it worth swiping to.
+
+     Set from `active`, not from a scroll position, so it changes on the same
+     signal the dots do and the two can't disagree — see useSwipeRail.ts. */
+  .work-card--peek {
+    opacity: 0.55;
+    transition: opacity 260ms ease;
+  }
+
   /* Cards are stretched to a common height by the rail, so the slack has to
-     go somewhere deliberate. Giving it to the last row parks the stack and
-     link on the card's floor instead of leaving a ragged gap under whichever
-     summary ran short. `items-center` in the template would centre each row
-     in its track, which puts the foot in the middle of that slack. */
+     go somewhere, and the last row is where it lands. `items-center` in the
+     template would centre each row in its track, which puts the foot mid-slack.
+  */
   .work-card__grid {
     flex: 1;
     grid-template-rows: auto auto 1fr;
     align-items: start;
   }
 
+  /* The slack is split rather than given to one end. The stack follows the
+     summary at the row gap — parking the whole foot on the floor put the
+     difference between the longest summary and the shortest into a hole right
+     under the description — while the link alone takes the leftover and sits
+     on the card's floor, so it lands in the same place on every slide. */
   .work-card__foot {
     align-self: stretch;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+  }
+
+  /* The link, or the "Not listed" line standing in for it. `auto` collapses
+     to nothing on the tallest card, which is the one with no slack to spend,
+     so the padding is what guarantees it never closes up on the stack. */
+  .work-card__foot > :last-child {
+    margin-top: auto;
+    padding-top: 1rem;
   }
 
   /* Marks a flow position for the blur band, which is an xl-only device. In
@@ -549,6 +561,15 @@ section {
 
   .work-fade {
     display: none;
+  }
+}
+
+/* The peek's fade is depth, not motion, so it stays — what goes is the ramp
+   between the two states, which is a thing animating on screen. Unbounded,
+   unlike the block above: this only has anything to act on below lg. */
+@media (prefers-reduced-motion: reduce) {
+  .work-card--peek {
+    transition: none;
   }
 }
 </style>

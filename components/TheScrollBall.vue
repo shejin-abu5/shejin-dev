@@ -7,22 +7,39 @@ import { BALL_QUERY, ballPerches, type Perch } from '~/composables/useScrollBall
 // it sideways, then falls, rolls and lands its way down through every section
 // that has registered a surface for it — see composables/useScrollBall.ts.
 
-// Landing bounce and squash, measured in px of scroll rather than as a
-// fraction of the perch. Perches differ enormously in how much scroll they
-// span (the hero is two viewports, an experience card is a few hundred px), so
-// a fraction would make the same landing read as a twitch on one and a slow
-// heave on the next.
-const BOUNCE_SCROLL = 280
+// Landing bounce and squash, on a clock in seconds.
+//
+// This used to be measured in px of scroll, which is wrong for the same reason
+// a real impact is not: an impact has a duration of its own, and the page
+// stopping does not stop it. Parameterised by scroll, the whole bounce froze
+// wherever the wheel stopped — and stopping anywhere in a contact phase left
+// the ball sitting permanently squashed at 0.88, a visibly flat ball resting
+// on a rail with no way out of it but scrolling further. Every perch showed
+// it; which ones you noticed just depended on where you happened to stop.
+//
+// A clock also settles the sizing question the scroll version could never get
+// right. Perches differ enormously in how much scroll they span (the hero is
+// two viewports, an experience chart card a few hundred px), so no px figure
+// suited all of them and no fraction did either — hence the cap that used to
+// live here. In seconds a landing is just a landing, on every perch.
+const BOUNCE_TIME = 0.62
 const BOUNCE_PX = 18
 const SQUASH = 0.12
 
-// ...but it can never be most of the perch either. A landing is the first beat
-// of a roll, not the roll. The experience chart's short cards run 305–356px of
-// scroll against the 280 above, so the two-hop bounce covered 79–92% of the
-// whole card: the ball hopped its entire length instead of settling and
-// rolling, and on a reversal replayed the hops out of phase. Capped as a
-// fraction of the window the ball actually has, whichever is shorter.
-const BOUNCE_MAX_FRAC = 0.45
+// The rest bounce on a `bounce` perch — see useScrollBall.ts. Slower and
+// taller than a landing, because it is not settling into anything: the page
+// has run out and this is the ball hopping on the spot until it moves again.
+const REST_PERIOD = 0.7
+const REST_PX = 40
+const REST_SQUASH = 0.16
+
+// A resting ball is exempt from the bottom fade — see FADE_PX. That band means
+// "nothing left to ride, so fade out rather than clip at the edge", and a
+// resting ball is the opposite of that: it is exactly where it is meant to be.
+// The rule the footer rests it on sits a couple of hundred px above the end of
+// the document, so it is at the low end of the frame when the ball first
+// arrives and rises from there — faded, it would land at a quarter strength
+// and brighten in place, which reads as a blink rather than a landing.
 
 // Fade band at each viewport edge. This is the whole of the "only visible
 // where it has something to ride" rule: over a long stretch with no perch the
@@ -45,7 +62,12 @@ const MIN_WINDOW = 0.24
 
 // How much scroll the exit fall past the last perch is spread over. Short on
 // purpose: past the last perch there is nothing left to ride, so the ball
-// should be gone before the footer rather than drifting down it.
+// should be gone rather than drifting.
+//
+// With the footer registering a resting perch this is now the fallback rather
+// than how the page ends — a resting perch's window outlasts the document, so
+// there is no "past the last perch" to reach. It still matters if the footer
+// is ever absent, and for any page that ends on an ordinary perch.
 const EXIT_SCROLL_VH = 0.32
 
 // Bounds on a sideways exit or entry. Within them the leg is derived from the
@@ -64,8 +86,9 @@ const SIDE_HASTE = 0.55
 
 // The pace the page rolls at, px of travel per px of scroll. Perch windows are
 // sized against it so the ball crosses a full-width rule and a chart card at
-// something like one speed.
-const TARGET_SPEED = 1.2
+// something like one speed. Under 1, so the ball travels less than the page
+// does — it reads as unhurried rather than as something being flung along.
+const TARGET_SPEED = 0.85
 
 // Time constant of the ball's follow. Every position here is looked up against
 // a scroll value, so the clock has to *be* scroll — smoothed, never rescaled.
@@ -158,6 +181,19 @@ onMounted(() => {
 
     let smoothed = window.scrollY
 
+    // Seconds since the ball started running, advanced by the ticker. Bounces
+    // are read off this rather than off scroll, so they play out and settle
+    // whether or not the page is still moving.
+    let clock = 0
+    // Clock reading of the last landing. -Infinity once it has played out, and
+    // at rest before the first one.
+    let landAt = -Infinity
+    // The last perch the ball actually *rode*, as opposed to fell towards.
+    // Changing it is the definition of a landing, and it is deliberately left
+    // alone while falling: dithering across a perch's entry line then reads as
+    // one arrival, not as the bounce restarting on every other frame.
+    let riding = -1
+
     // The ball must not be sitting in the headline before the headline has
     // finished arriving.
     const intro = { v: 0 }
@@ -177,6 +213,11 @@ onMounted(() => {
       // first frame the ball rides that perch.
       exitAnchor = new Array(sorted.length).fill(null)
       lastX = null
+      // Indices have moved, so the perch the ball was on is no longer named by
+      // the number held for it. Cleared rather than remapped: a refresh is not
+      // a landing, and the alternative is the ball bouncing every time the
+      // window is resized.
+      riding = -1
       ballPerches.dirty = false
     }
 
@@ -199,25 +240,36 @@ onMounted(() => {
         bounds[s * 2 + 1] = Math.max(b, a + 1)
       }
 
-      const gap = vh * MIN_FALL
       const floor = vh * MIN_WINDOW
 
       // Left to right, so each fix is made against windows already settled.
       for (let s = 1; s < sorted.length; s++) {
+        // The fall belongs to the perch being left — it is the one that knows
+        // how far the ball has to go from here.
+        const gap = vh * (sorted[s - 1].fall ?? MIN_FALL)
+
         // First try to buy the gap out of the earlier perch's roll — it has
         // already been ridden, and ending it a little sooner costs less than
         // moving the section that is arriving.
+        //
+        // A resting perch is where the page ends, so it cannot be moved to
+        // make room and the earlier window gives way without a floor. Every
+        // other perch keeps its floor and is shifted instead.
+        const anchored = sorted[s].bounce
         bounds[s * 2 - 1] = Math.min(
           bounds[s * 2 - 1],
-          Math.max(bounds[s * 2] - gap, bounds[s * 2 - 2] + floor)
+          Math.max(bounds[s * 2] - gap, bounds[s * 2 - 2] + (anchored ? 1 : floor))
         )
 
         // If that was not enough, shift the later window bodily rather than
         // truncating it: a perch whose window is cut short is one the ball
         // crosses at double speed, which is the opposite of what a handoff
         // needs.
+        //
+        // Never a resting perch, though — shifting that one past the end of
+        // the document is a ball that falls forever and never lands.
         const short = bounds[s * 2 - 1] + gap - bounds[s * 2]
-        if (short > 0) {
+        if (short > 0 && !anchored) {
           bounds[s * 2] += short
           bounds[s * 2 + 1] += short
         }
@@ -301,11 +353,12 @@ onMounted(() => {
 
       let cx: number
       let cy: number
-      // Scroll position at which the ball landed, or null when it did not
-      // arrive from a fall and so should not bounce.
-      let landedAt: number | null = null
-      // Px of scroll that landing's bounce is spread over — see BOUNCE_SCROLL.
-      let bounceOver = BOUNCE_SCROLL
+      // Whether the ball is on a surface this frame. A landing bounce is a
+      // thing that happens to a ball resting on something, so it must not
+      // carry on into the fall off the other end of it.
+      let onPerch = false
+      // Whether that surface is the ball's resting place.
+      let atRest = false
 
       if (i >= sorted.length) {
         // Past the last perch — keep falling, out of the frame.
@@ -325,7 +378,6 @@ onMounted(() => {
         cy = p.y - ballR + vh * 1.15 * k * k
       } else {
         const enter = bounds[i * 2]
-        const exit = bounds[i * 2 + 1]
 
         if (y >= enter) {
           const perch = sorted[i]
@@ -339,11 +391,16 @@ onMounted(() => {
           // way the page is being scrolled.
           const ex = pointAt(perch, perch.to())
           if (ex) exitAnchor[i] = ex.x
-          // Perch 0 is where the ball starts the page; it never landed there.
-          if (i > 0) {
-            landedAt = enter
-            bounceOver = Math.min(BOUNCE_SCROLL, (exit - enter) * BOUNCE_MAX_FRAC)
-          }
+          onPerch = true
+          atRest = perch.bounce
+          // A landing is arriving on a perch that is not the one the ball was
+          // last riding — which covers dropping onto the next one going down
+          // and dropping back onto the previous one coming up, both of which
+          // are arrivals out of the air. Perch 0 is where the ball starts the
+          // page rather than somewhere it landed, and `riding` of -1 is the
+          // first frame or a refresh, so neither of those bounces.
+          if (i > 0 && riding >= 0 && riding !== i) landAt = clock
+          riding = i
         } else {
           // Falling into perch i. Both endpoints are read live, so the arc
           // stays continuous while the surfaces underneath it are still
@@ -465,19 +522,29 @@ onMounted(() => {
       }
 
       let sy = 1
-      if (landedAt !== null) {
-        const bk = clamp01((y - landedAt) / Math.max(1, bounceOver))
-        if (bk < 1) {
-          const decay = 1 - bk
-          // Height above the surface. Zero at each contact — bk of 0, ½ and 1
+      if (atRest) {
+        // One hop per REST_PERIOD, forever. |sin| is the right shape for it:
+        // a cusp at each contact and a rounded apex between, which is what a
+        // ball leaving and meeting a surface actually does. A plain sine would
+        // ease *into* the floor, and a ball that decelerates on its way down
+        // reads as floating.
+        const t = (clock % REST_PERIOD) / REST_PERIOD
+        cy -= REST_PX * Math.sin(t * Math.PI)
+        // Squash *is* the contact, so it is sharply concentrated at the ends
+        // of the hop and absent for the whole flight.
+        sy = 1 - REST_SQUASH * Math.abs(Math.cos(t * Math.PI)) ** 6
+      } else if (onPerch) {
+        const bt = (clock - landAt) / BOUNCE_TIME
+        if (bt >= 0 && bt < 1) {
+          const decay = 1 - bt
+          // Height above the surface. Zero at each contact — bt of 0, ½ and 1
           // — and peaking between them.
-          cy -= BOUNCE_PX * decay * Math.abs(Math.sin(bk * Math.PI * 2))
-          // Squash *is* the contact, so it is the complement of that height,
-          // on the same clock: full where the ball is touching, none at the
-          // top of a hop. Giving it a clock of its own drifted it out of phase
-          // with the bounce — peak squash landed a dozen pixels into the air,
-          // which reads as an egg rather than an impact.
-          sy = 1 - SQUASH * decay * Math.abs(Math.cos(bk * Math.PI * 2))
+          cy -= BOUNCE_PX * decay * Math.abs(Math.sin(bt * Math.PI * 2))
+          // On the same clock as the height, deliberately: full where the ball
+          // is touching, none at the top of a hop. Giving it a clock of its
+          // own drifted it out of phase with the bounce — peak squash landed a
+          // dozen pixels into the air, which reads as an egg, not an impact.
+          sy = 1 - SQUASH * decay * Math.abs(Math.cos(bt * Math.PI * 2))
         }
       }
 
@@ -506,7 +573,7 @@ onMounted(() => {
       setO(
         Math.min(
           clamp01((cy + ballR) / FADE_PX),
-          clamp01((vh - (cy - ballR)) / FADE_PX),
+          atRest ? 1 : clamp01((vh - (cy - ballR)) / FADE_PX),
           clamp01((cx + ballR) / FADE_PX),
           clamp01((vw - (cx - ballR)) / FADE_PX)
         ) * intro.v
@@ -524,6 +591,7 @@ onMounted(() => {
       // Clamped: coming back to a backgrounded tab hands over one enormous
       // delta, which would snap the ball across the page in a single frame.
       const dt = Math.min(deltaMs / 1000, 0.05)
+      clock += dt
       smoothed += (window.scrollY - smoothed) * (1 - Math.exp(-dt / FOLLOW_TAU))
       apply()
     }

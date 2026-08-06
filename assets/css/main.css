@@ -135,24 +135,29 @@ button:focus-visible {
   .swipe-dots {
     display: flex;
     justify-content: center;
-    gap: 0.25rem;
-    margin-top: 1.5rem;
+    gap: 0;
+    margin-top: 1.25rem;
   }
 
   /* The mark people see is the span; the target their thumb gets is the
      button around it. Sizing the dot itself to 44px would read as a row of
      bullets rather than a position indicator.
 
-     Shrinkable on the width axis only: nine dots at a full 44px overrun a
-     390px screen, and a wrapped second row of dots reads as a second rail.
-     They give up width rather than the 44px of height, and the floor keeps
-     them well clear of the 24px minimum even on the longest rail. */
+     The button's width, not `gap`, is what sets the space between the marks —
+     the gap only adds to whatever the buttons already leave around their 7px
+     spans, so tightening the row means narrowing these.
+
+     24px is the floor and the row now sits on it: WCAG 2.2's minimum target
+     is 24x24, and with `gap: 0` these are edge to edge, so nothing overlaps
+     and each one still clears it. The 44px of height is what keeps them
+     comfortable to hit; it is the width that gives, which is also why nine
+     dots still fit a 390px screen without wrapping to a second row that
+     would read as a second rail. */
   .swipe-dot {
     display: grid;
     place-items: center;
     height: 44px;
-    flex: 0 1 44px;
-    min-width: 30px;
+    flex: 0 0 24px;
     border-radius: 9999px;
   }
 
@@ -165,7 +170,7 @@ button:focus-visible {
   }
 
   .swipe-dot[aria-current] > span {
-    background: theme('colors.accent');
+    background: theme('colors.ink');
     transform: scale(1.35);
   }
 }
