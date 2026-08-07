@@ -595,4 +595,11 @@ onMounted(() => {
   }
 }
 
+@media screen and (max-width: 991px) {
+  .skill-name {
+    perspective: none;
+    -webkit-perspective: none;
+  }
+}
+
 </style>
