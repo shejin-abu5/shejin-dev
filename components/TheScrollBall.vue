@@ -31,7 +31,12 @@ const SQUASH = 0.12
 // has run out and this is the ball hopping on the spot until it moves again.
 const REST_PERIOD = 0.7
 const REST_PX = 40
-const REST_SQUASH = 0.16
+const REST_SQUASH = 0.1
+// How much of the hop, either side of a contact, the ball is deformed for.
+// Contact is brief — a ball leaves the floor round. Widening this is what
+// makes a resting ball look permanently flat rather than repeatedly struck:
+// the deformation trails it up into the air, where nothing is touching it.
+const REST_CONTACT = 0.12
 
 // A resting ball is exempt from the bottom fade — see FADE_PX. That band means
 // "nothing left to ride, so fade out rather than clip at the edge", and a
@@ -47,18 +52,56 @@ const REST_SQUASH = 0.16
 // it clip at the edge.
 const FADE_PX = 190
 
-// Every handoff gets at least this much scroll of fall between the two
-// perches, and no perch keeps less than MIN_WINDOW of roll. Both as fractions
-// of viewport height.
+// The pace the ball travels at, px of on-screen travel per px of scroll. This
+// is the one number the whole journey is laid out against — see layout().
 //
-// Sections size their own windows and cannot see their neighbours, so two of
-// them can meet exactly — Skills' rule ended on the very scroll position
-// Education's row began, leaving no fall at all between them: the ball stopped
-// at the right-hand end of one rule and was already at the left-hand end of
-// the next, most of a screen away, with the edge fades snapping it out and
-// back in over a handful of frames.
-const MIN_FALL = 0.3
-const MIN_WINDOW = 0.24
+// It used to be the other way round, and that is the bug this file was opened
+// for. Each section picked its own scroll window and its own from→to, and
+// whatever speed fell out of dividing one by the other was the speed the ball
+// went. `TARGET_SPEED` sat here claiming perch windows were "sized against
+// it"; nothing sized anything. Measured at 1920×1080, horizontally:
+//
+//   projects rail        0.77      experience → skills   2.70
+//   skills rail          0.68      skills → education    3.47
+//   languages card       0.77      languages → footer    2.56
+//   hero mark            1.34      chart cards           0.19 – 0.40
+//
+// The pattern is the complaint: the crossings — the moments the ball is most
+// visible, arcing alone across open page — were consistently the fastest thing
+// on the site, and reversing direction made them worse, not better. The ball
+// cruises, bolts, cruises.
+//
+// So the direction of derivation is inverted. Speed is the invariant and the
+// windows are computed from it, every frame, against whatever scroll the page
+// actually has between one anchored surface and the next.
+//
+// ROLL is the cruise, and 0.75 is measured rather than chosen: it is what the
+// three plain rails were already doing on their own. It is the pace the page
+// reads at when nothing is going wrong.
+const ROLL_SPEED = 0.75
+// A crossing may run a little quicker than a roll — the ball is airborne, and
+// too much hang time reads as float rather than as a hop. Only a little: these
+// were the fast part, and the fix is not to license them.
+const CROSS_SPEED = 0.9
+
+// Least scroll a crossing gets whatever its width, as a fraction of viewport
+// height. This is the vertical budget: a hop that goes almost straight down
+// has no horizontal distance to size itself from and still has to fall for
+// long enough to read as falling. A perch's own `fall` overrides it, which is
+// how a section says "the next hop is a short one" — see useScrollBall.ts.
+const MIN_CROSS_VH = 0.3
+
+// How much of its from→to a roll may be cut back to, when a stretch of page
+// does not have the scroll to ride all of it at ROLL_SPEED.
+//
+// Riding part of a rule is invisible — nobody knows how far along the ball was
+// supposed to get. Sprinting across the whole of it is not, and that is the
+// only other way to make the distance fit. So the ball gives up ground rather
+// than composure.
+//
+// Not 0: a perch the ball lands on and does not roll along at all reads as a
+// stop, not as a landing.
+const ROLL_MIN_RIDE = 0.22
 
 // How much scroll the exit fall past the last perch is spread over. Short on
 // purpose: past the last perch there is nothing left to ride, so the ball
@@ -70,25 +113,18 @@ const MIN_WINDOW = 0.24
 // is ever absent, and for any page that ends on an ordinary perch.
 const EXIT_SCROLL_VH = 0.32
 
-// Bounds on a sideways exit or entry. Within them the leg is derived from the
-// roll speed of the perch it joins, so the ball leaves the frame at exactly
-// the pace it was rolling and arrives at the pace it will roll — no velocity
-// step at either handoff. These only stop a degenerate perch producing a leg
-// so short it snaps or so long it creeps.
+// Bounds on a sideways exit or entry. The leg itself is CROSS_SPEED against
+// the distance to the frame edge, same as any other crossing; these only stop
+// a degenerate perch producing a leg so short it snaps or so long it creeps.
+//
+// SIDE_HASTE used to live here — the leg was cut to 55% of its constant-speed
+// length and a quadratic made up the difference, which meant the ball left the
+// frame at 1.8× the pace it had been rolling and came back in at the same.
+// That is half of what "very fast between sections" was. With the leg sized
+// from the speed it is joining there is nothing left to make up, so the
+// quadratics below only have to match slope, not buy back distance.
 const SIDE_LEG_MIN = 120
 const SIDE_LEG_MAX = 1400
-
-// Fraction of the constant-speed length a sideways leg actually gets. Below 1
-// the ball accelerates away as it leaves and decelerates as it arrives, which
-// is how the leg can be short without the handoff stepping: what has to be
-// continuous at a join is the velocity, not the acceleration.
-const SIDE_HASTE = 0.55
-
-// The pace the page rolls at, px of travel per px of scroll. Perch windows are
-// sized against it so the ball crosses a full-width rule and a chart card at
-// something like one speed. Under 1, so the ball travels less than the page
-// does — it reads as unhurried rather than as something being flung along.
-const TARGET_SPEED = 0.85
 
 // Time constant of the ball's follow. Every position here is looked up against
 // a scroll value, so the clock has to *be* scroll — smoothed, never rescaled.
@@ -140,10 +176,49 @@ onMounted(() => {
     const clamp01 = gsap.utils.clamp(0, 1)
 
     let sorted: Perch[] = []
-    // Every perch's [enter, exit] resolved once per frame, flat. Rebuilt
-    // rather than read ad hoc so the windows can be forced monotonic — see
-    // resolve().
+    // Every perch's [enter, exit] for this frame, flat. Computed rather than
+    // read: for a free perch these are laid out from the ball's speed, not
+    // from what the section declared — see layout().
     let bounds: number[] = []
+
+    // Each surface's ride geometry for this frame: left end, ridable width,
+    // and top edge, all in viewport coordinates. Measured once per frame in
+    // measure() and read everywhere else.
+    //
+    // Cached because layout() needs every perch's geometry before it can place
+    // any of them — it sizes each crossing from the distance between the two
+    // surfaces it joins — and reading a rect per question would mean dozens of
+    // getBoundingClientRect calls per frame instead of one per surface. A width
+    // of -1 marks a perch whose surface has gone.
+    let x0s: number[] = []
+    let widths: number[] = []
+    let tops: number[] = []
+
+    // How much of its from→to each perch actually rides this frame, 0–1.
+    // 1 unless the stretch of page it sits in is too short to ride all of it
+    // at ROLL_SPEED — see layout().
+    let ride: number[] = []
+
+    // The scroll each section asked for, before layout had its say.
+    //
+    // Kept because a perch's from→to is not the whole of how far the ball
+    // travels on it. A surface can move under the ball: the hero's mark slides
+    // a viewport and a half left while the ball sits at one point on it, so its
+    // from and to are the same value and its roll distance measures zero.
+    // Sizing that window from roll distance alone collapses it to nothing, and
+    // the ball spends the whole hero falling towards the next perch instead of
+    // riding the headline — which is what happened the first time this was
+    // written. A section knows how long its surface needs the ball; layout may
+    // lengthen that to keep the pace down, and shortens it only when the page
+    // genuinely has no room.
+    let declared: number[] = []
+    // And the scroll position each section asked to be handed the ball at.
+    // Layout may hand it over later — a crossing that needs more room pushes
+    // everything after it back — but never earlier: a section's start is the
+    // point at which its surface is somewhere the ball can usefully be, and
+    // arriving before it means landing on something that is not on screen yet.
+    let declStart: number[] = []
+
     let ballR = ball.offsetWidth / 2
     // null means "the ball did not get here by rolling" — a teleport across an
     // off-stage gap, or a refresh. The next frame starts a fresh rotation
@@ -163,20 +238,34 @@ onMounted(() => {
     let launchX: number | null = null
     let launchFor = -1
 
-    // Each perch's exit point, recorded on every frame the ball is actually
-    // riding it.
+    // The exit point of each perch that owns its own clock, recorded on every
+    // frame the ball is actually riding it.
     //
-    // Pinning launchX on entry to the fall is not enough on its own, because
-    // *when* that entry happens depends on which way you are scrolling.
-    // Downwards you enter the hop off a card that is still fully open;
-    // upwards you enter the same hop off a card that has already closed, and
-    // the pinned value is then the collapsed bar's right edge. Measured on the
-    // chart, the same two hops launched from x=705 and x=989 going down but
-    // x=450 and x=754 coming up — a quarter of the frame out, and the jump you
-    // saw at every handoff scrolling back.
+    // Pinning launchX on entry to the fall is not enough on its own for those,
+    // because *when* that entry happens depends on which way you are
+    // scrolling. Downwards you enter the hop off a card that is still fully
+    // open; upwards you enter the same hop off a card that has already closed,
+    // and the pinned value is then the collapsed bar's right edge. Measured on
+    // the chart, the same two hops launched from x=705 and x=989 going down
+    // but x=450 and x=754 coming up — a quarter of the frame out, and the jump
+    // you saw at every handoff scrolling back.
     //
-    // Riding, by contrast, happens over the same geometry in both directions,
-    // so the last value recorded here is the open card's edge either way.
+    // Only for those, though, and that qualifier is the whole of a second bug.
+    // A recorded anchor is a claim that a perch has one exit point; it is only
+    // true of a surface whose shape is driven by its section's timeline, where
+    // "open" is a state the ball can wait for. It is false of a surface that
+    // travels with the scroll, and the hero's mark travels a viewport and a
+    // half. Recorded there, the anchor held whatever x the mark had when the
+    // ball last sat on it — on a page loaded at the top, x=1448, the mark's
+    // starting position. Scroll to the bottom and come back up and the fall
+    // out of the hero launched from 1448 while the mark itself was at x=1,
+    // until the ball crossed back into the hero's window and snapped the width
+    // of the screen to meet it. That is the jump on the way up through the
+    // hero: 1422 to 64 between two frames, at full opacity.
+    //
+    // A surface with no clock of its own is at the same place at the same
+    // scroll position whichever way you arrived, so reading it live is both
+    // simpler and correct.
     let exitAnchor: (number | null)[] = []
 
     let smoothed = window.scrollY
@@ -208,6 +297,12 @@ onMounted(() => {
         })
         .sort((a, b) => a.range()[0] - b.range()[0])
       bounds = new Array(sorted.length * 2).fill(0)
+      x0s = new Array(sorted.length).fill(0)
+      widths = new Array(sorted.length).fill(-1)
+      tops = new Array(sorted.length).fill(0)
+      ride = new Array(sorted.length).fill(1)
+      declared = new Array(sorted.length).fill(0)
+      declStart = new Array(sorted.length).fill(0)
       // Indices can move under a re-sort, so anchors recorded against the old
       // order would be attached to the wrong surfaces. Each is refilled by the
       // first frame the ball rides that perch.
@@ -222,71 +317,296 @@ onMounted(() => {
     }
 
     /**
-     * Resolves every perch window for this frame and forces the set to be
-     * strictly non-overlapping and ascending.
-     *
-     * Sections declare their windows independently and know nothing about each
-     * other, so two neighbours can overlap by a few pixels — and where they
-     * do, a scroll position belongs to both. The lookup below would then pick
-     * one or the other depending on which side of the overlap the clock landed
-     * on, and a clock that is easing can cross that line several times: the
-     * ball flips between two perches on consecutive frames. That reads as
-     * jitter at exactly the section boundaries.
+     * Every surface's ride geometry for this frame, in viewport coordinates.
+     * One getBoundingClientRect per perch, before anything is asked about any
+     * of them — layout() needs the whole set to size the crossings between
+     * them, and asking per question would be dozens of rect reads a frame.
      */
-    const resolve = (vh: number) => {
+    const measure = () => {
       for (let s = 0; s < sorted.length; s++) {
-        const [a, b] = sorted[s].range()
-        bounds[s * 2] = a
-        bounds[s * 2 + 1] = Math.max(b, a + 1)
-      }
-
-      const floor = vh * MIN_WINDOW
-
-      // Left to right, so each fix is made against windows already settled.
-      for (let s = 1; s < sorted.length; s++) {
-        // The fall belongs to the perch being left — it is the one that knows
-        // how far the ball has to go from here.
-        const gap = vh * (sorted[s - 1].fall ?? MIN_FALL)
-
-        // First try to buy the gap out of the earlier perch's roll — it has
-        // already been ridden, and ending it a little sooner costs less than
-        // moving the section that is arriving.
-        //
-        // A resting perch is where the page ends, so it cannot be moved to
-        // make room and the earlier window gives way without a floor. Every
-        // other perch keeps its floor and is shifted instead.
-        const anchored = sorted[s].bounce
-        bounds[s * 2 - 1] = Math.min(
-          bounds[s * 2 - 1],
-          Math.max(bounds[s * 2] - gap, bounds[s * 2 - 2] + (anchored ? 1 : floor))
-        )
-
-        // If that was not enough, shift the later window bodily rather than
-        // truncating it: a perch whose window is cut short is one the ball
-        // crosses at double speed, which is the opposite of what a handoff
-        // needs.
-        //
-        // Never a resting perch, though — shifting that one past the end of
-        // the document is a ball that falls forever and never lands.
-        const short = bounds[s * 2 - 1] + gap - bounds[s * 2]
-        if (short > 0 && !anchored) {
-          bounds[s * 2] += short
-          bounds[s * 2 + 1] += short
+        const el = sorted[s].surface()
+        if (!el) {
+          widths[s] = -1
+          continue
         }
+        const r = el.getBoundingClientRect()
+        const a = r.left + sorted[s].inset
+        x0s[s] = a
+        widths[s] = Math.max(0, r.right - sorted[s].inset - a)
+        tops[s] = r.top
       }
     }
 
-    /** A point on a perch, `t` as a fraction of its inset width. */
-    const pointAt = (p: Perch, t: number) => {
-      const el = p.surface()
-      if (!el) return null
-      const r = el.getBoundingClientRect()
-      const x0 = r.left + p.inset
-      const x1 = Math.max(x0, r.right - p.inset)
+    /**
+     * A perch whose window is not the ball's to move.
+     *
+     * A scrubbed section hands the ball its own clock — a card is ridable
+     * exactly while it is open, and that is decided by the section's timeline,
+     * not by how fast the ball would like to be going. The resting perch is
+     * where the document ends, so there is nowhere to move it to. Everything
+     * else is free, and free is the normal case.
+     */
+    const anchored = (s: number) => !!sorted[s].progress || sorted[s].bounce
+
+    /** A point on perch `idx`, `t` as a fraction of its inset width. */
+    const pointAt = (idx: number, t: number) => {
+      if (widths[idx] < 0) return null
       // Clamping `t` rather than trusting it is what absorbs the residual
       // desync between this ball's follow and a section's own scrub: the ball
       // can never end up past the end of the surface it is supposed to be on.
-      return { x: x0 + (x1 - x0) * clamp01(t), y: r.top }
+      return { x: x0s[idx] + widths[idx] * clamp01(t), y: tops[idx] }
+    }
+
+    /** Where perch `idx`'s roll ends this frame, after any cutback. */
+    const exitT = (idx: number) => {
+      const p = sorted[idx]
+      const a = p.from()
+      return a + (p.to() - a) * ride[idx]
+    }
+
+    /** Px the ball travels sideways riding all of perch `idx`. */
+    const rollDist = (idx: number) =>
+      widths[idx] < 0 ? 0 : Math.abs(sorted[idx].to() - sorted[idx].from()) * widths[idx]
+
+    /**
+     * Scroll a crossing from perch `a` to perch `b` needs, at CROSS_SPEED.
+     *
+     * Measured with both rolls at full length, before any cutback is known —
+     * a cutback moves the launch point, so in principle this is circular.
+     * Deliberately not iterated: resolving it would make one frame's layout
+     * depend on the last one's, and a feedback loop running at 60Hz over
+     * geometry that is itself moving is how a ball starts to shimmer. A fixed
+     * point that is slightly wrong beats a moving one that is exactly right.
+     */
+    const crossWant = (a: number, b: number, vh: number) => {
+      const floor = vh * (sorted[a].fall ?? MIN_CROSS_VH)
+      if (widths[a] < 0 || widths[b] < 0) return floor
+
+      const from = x0s[a] + widths[a] * sorted[a].to()
+      const to = x0s[b] + widths[b] * sorted[b].from()
+
+      // Sideways: the ball rolls out past one edge of the frame and comes back
+      // in at the other, so the distance is the two legs, not the gap between
+      // the perches. What happens in between is off-stage and costs nothing.
+      const dist = sorted[a].side
+        ? Math.max(0, window.innerWidth + ballR * 4 - from) + Math.max(0, to + ballR * 4)
+        : Math.abs(to - from)
+
+      return Math.max(floor, dist / CROSS_SPEED)
+    }
+
+    /**
+     * Lays every perch window out for this frame at the ball's own speed.
+     *
+     * The page is a sequence of rolls and crossings between fixed points, and
+     * the fixed points are the anchored perches — the scrubbed chart cards and
+     * the footer's resting rule, whose windows belong to their sections. Each
+     * free stretch between two anchors is a scroll budget, and this spends it
+     * on the legs in that stretch in proportion to how far the ball has to
+     * travel along each. Speed is then constant across the whole stretch by
+     * construction, and there is no arithmetic anywhere that can produce a
+     * crossing four times quicker than the roll leading into it.
+     *
+     * This also settles, without a special case, what resolve() used to need
+     * MIN_FALL and MIN_WINDOW for. Sections declare their windows knowing
+     * nothing about their neighbours, so two of them could meet exactly or
+     * overlap by a few pixels, and where they overlapped a scroll position
+     * belonged to both — the lookup picked one or the other depending on which
+     * side of the line an easing clock happened to land, flipping between two
+     * perches on consecutive frames. Windows are no longer read from sections
+     * at all, only their anchors are, so the set is ordered and disjoint
+     * because it was built that way.
+     */
+    const layout = (vh: number) => {
+      const n = sorted.length
+
+      for (let s = 0; s < n; s++) {
+        const [a, b] = sorted[s].range()
+        bounds[s * 2] = a
+        bounds[s * 2 + 1] = Math.max(b, a + 1)
+        declared[s] = bounds[s * 2 + 1] - bounds[s * 2]
+        declStart[s] = bounds[s * 2]
+        ride[s] = 1
+      }
+      if (!n) return
+
+      // Anchored windows stay exactly as declared; the free runs between them
+      // are re-laid. Two adjacent anchors have nothing between them to lay.
+      let s = 0
+      while (s < n) {
+        if (anchored(s)) {
+          s++
+          continue
+        }
+        let e = s
+        while (e < n && !anchored(e)) e++
+        layoutRun(s, e, vh)
+        s = e
+      }
+
+      // Anchors are the sections' own geometry and can still meet or cross
+      // each other. Nothing here can fix that — their windows are not the
+      // ball's to move — but the lookup must not see a window that starts
+      // before the one before it ended.
+      for (let i = 1; i < n; i++) {
+        if (bounds[i * 2] < bounds[i * 2 - 1]) bounds[i * 2] = bounds[i * 2 - 1]
+        if (bounds[i * 2 + 1] <= bounds[i * 2]) bounds[i * 2 + 1] = bounds[i * 2] + 1
+      }
+    }
+
+    /**
+     * Lays out the free perches `[s, e)` and the crossings around them into
+     * the scroll between the anchors either side.
+     */
+    const layoutRun = (s: number, e: number, vh: number) => {
+      const n = sorted.length
+      // The crossing into this run comes out of the previous anchor's exit;
+      // the crossing out of it has to land on the next anchor's entry. With no
+      // anchor on a side, the run keeps what that end of it declared.
+      const start = s > 0 ? bounds[s * 2 - 1] : bounds[s * 2]
+      const end = e < n ? bounds[e * 2] : bounds[(e - 1) * 2 + 1]
+      const budget = end - start
+      // Two anchors that meet or cross leave nothing to spend. Their windows
+      // are the sections' own and not the ball's to move, so the run keeps
+      // what it declared and the ordering guard in layout() picks up the
+      // pieces — better a squeezed run than spans computed off a negative
+      // budget, which would lay the windows out backwards.
+      if (budget <= 1) return
+
+      // Legs, in order: an optional crossing in, then roll/crossing pairs,
+      // then an optional crossing out. Wants are in scroll px already, so a
+      // want is just "the scroll this leg needs to run at the right speed".
+      // Two figures per roll. `need` is what riding all of it at ROLL_SPEED
+      // costs; `pref` is that or the section's own window, whichever is longer.
+      // A window longer than the roll needs is a ball rolling slower than the
+      // cruise, which nobody has ever complained about — and for a surface
+      // that moves under the ball it is the only thing holding the window open
+      // at all. See `declared`.
+      const need: number[] = []
+      const pref: number[] = []
+      let sumNeed = 0
+      let sumPref = 0
+      for (let i = s; i < e; i++) {
+        const nd = rollDist(i) / ROLL_SPEED
+        const pf = Math.max(nd, declared[i])
+        need.push(nd)
+        pref.push(pf)
+        sumNeed += nd
+        sumPref += pf
+      }
+
+      const wantCross: number[] = []
+      let sumCross = 0
+      let sumSide = 0
+      const addCross = (a: number, b: number) => {
+        const w = crossWant(a, b, vh)
+        wantCross.push(w)
+        sumCross += w
+        if (sorted[a].side) sumSide += w
+      }
+      if (s > 0) addCross(s - 1, s)
+      for (let i = s; i < e - 1; i++) addCross(i, i + 1)
+      if (e < n) addCross(e - 1, e)
+
+      // Crossings are paid first and rolls give way, in that order, because a
+      // roll can be shortened invisibly and a crossing cannot: the ball is in
+      // open frame for the whole of a crossing, going somewhere definite, and
+      // the only way to shorten one is to make it quicker. That is the thing
+      // this file exists to stop.
+      const forRolls = budget - sumCross
+      const rollSpan: number[] = []
+      let scale = 1
+
+      if (forRolls >= sumPref) {
+        // Room for everything, including whatever the sections asked for.
+        for (let j = 0; j < pref.length; j++) rollSpan.push(pref[j])
+      } else if (forRolls >= sumNeed) {
+        // Room to ride every roll at the cruise, but not for the slack the
+        // sections wanted on top. Give that slack back in proportion.
+        const t = (forRolls - sumNeed) / Math.max(1, sumPref - sumNeed)
+        for (let j = 0; j < need.length; j++) rollSpan.push(need[j] + (pref[j] - need[j]) * t)
+      } else {
+        // Not even room to ride them all. The ball rides less of each surface
+        // rather than crossing it faster.
+        const r = Math.max(ROLL_MIN_RIDE, forRolls / Math.max(1, sumNeed))
+        for (let j = 0; j < need.length; j++) rollSpan.push(need[j] * r)
+        for (let i = s; i < e; i++) ride[i] = Math.min(1, r)
+
+        // Floored out and still short. This is a stretch of page with less
+        // scroll in it than the ball has distance to cover, and no arithmetic
+        // here can conjure more — so the shortfall is spread evenly over every
+        // leg rather than dropped on whichever one happens to be last.
+        let sumFloor = 0
+        for (const v of rollSpan) sumFloor += v
+        if (sumFloor + sumCross > budget) scale = budget / (sumFloor + sumCross)
+      }
+
+      // Spare scroll goes off-stage first. A sideways crossing spends most of
+      // itself past the edge of the frame, so lengthening one costs nothing
+      // that anybody sees — where the alternative, spreading it over the run,
+      // is a ball that rolls slower than the page reads.
+      let sumRoll = 0
+      for (const v of rollSpan) sumRoll += v
+      let sideBonus = 0
+      let evenBonus = 0
+      const spare = budget - (sumRoll + sumCross)
+      if (spare > 0) {
+        if (sumSide > 0) sideBonus = spare / sumSide
+        else evenBonus = spare / Math.max(1, sumRoll + sumCross)
+      }
+
+      const span = (want: number, side: boolean) =>
+        want * scale * (1 + (side ? sideBonus : evenBonus))
+
+      // Scroll still owed to everything from perch i onwards — its roll, every
+      // crossing after it, and the crossing out of the run. Walked backwards
+      // so the forward pass below can tell, at each perch, how much of the
+      // budget it is not allowed to spend.
+      const rollAt = (i: number) => rollSpan[i - s] * scale * (1 + evenBonus)
+      // wantCross holds the crossing into the run first, where there is one,
+      // then one per gap between perches, then the crossing out.
+      const lead = s > 0 ? 1 : 0
+      const gapAfter = (i: number) => span(wantCross[lead + (i - s)], sorted[i].side)
+
+      const owed: number[] = new Array(e - s).fill(0)
+      let acc = e < n ? span(wantCross[wantCross.length - 1], sorted[e - 1].side) : 0
+      for (let i = e - 1; i >= s; i--) {
+        acc += rollAt(i)
+        owed[i - s] = acc
+        if (i > s) acc += gapAfter(i - 1)
+      }
+
+      let c = start
+      if (lead) c += span(wantCross[0], sorted[s - 1].side)
+      for (let i = s; i < e; i++) {
+        // Never handed the ball before its section is ready for it. Spending
+        // the scroll a crossing asked for can only push a landing later, but
+        // spare scroll pulled one earlier — and a perch whose window opens
+        // ahead of its declared start is a surface that is not on screen yet.
+        // The projects rule showed it: laid out 370px early, the ball met it
+        // 370px lower, which is below the fold, so the hop out of the hero
+        // dived off the bottom of the frame and the ball reappeared from
+        // underneath riding a rule up into view. The scroll this costs goes
+        // back to the crossing before it, which is a longer fall — the right
+        // place for it.
+        //
+        // Only as far as the rest of the run can afford, though. Waiting is
+        // free until it starts eating what the crossings after it were
+        // promised, and then it is the most expensive thing here: the work
+        // deck's last card declares a window that runs past the point the
+        // experience chart opens, and honouring all of it left the hop into
+        // the chart with almost no scroll to happen in — the ball came back
+        // into frame at 2.7px per px, which is the whole complaint again in
+        // the one place the layout had reserved room to avoid it.
+        c = Math.max(c, Math.min(declStart[i], end - owed[i - s]))
+        bounds[i * 2] = c
+        // A roll never soaks up spare scroll it did not ask for unless the
+        // whole run is being stretched evenly — see above.
+        c += rollAt(i)
+        bounds[i * 2 + 1] = Math.max(c, bounds[i * 2] + 1)
+        c = bounds[i * 2 + 1]
+        if (i < e - 1) c += gapAfter(i)
+      }
     }
 
     /**
@@ -307,22 +627,79 @@ onMounted(() => {
       return clamp01((smoothed - enter) / Math.max(1, bounds[idx * 2 + 1] - enter))
     }
 
-    /** The `t` for `pointAt` that corresponds to perch `idx`'s current progress. */
+    /**
+     * The `t` for `pointAt` that corresponds to perch `idx`'s current
+     * progress, over however much of its from→to it is riding this frame.
+     */
     const perchT = (idx: number) => {
       const p = sorted[idx]
       const a = p.from()
-      return a + (p.to() - a) * perchK(idx)
+      return a + (exitT(idx) - a) * perchK(idx)
     }
 
     /** Px of horizontal travel per px of scroll while riding perch `idx`. */
     const rollSpeed = (idx: number) => {
-      const p = sorted[idx]
-      const el = p.surface()
-      if (!el) return 0
-      const w = Math.max(1, el.getBoundingClientRect().width - p.inset * 2)
-      return (
-        (Math.abs(p.to() - p.from()) * w) / Math.max(1, bounds[idx * 2 + 1] - bounds[idx * 2])
-      )
+      if (widths[idx] < 0) return 0
+      const d = Math.abs(exitT(idx) - sorted[idx].from()) * widths[idx]
+      return d / Math.max(1, bounds[idx * 2 + 1] - bounds[idx * 2])
+    }
+
+    /**
+     * Whether a hop from perch `a` to perch `b` can be timed on a clock the
+     * two of them share.
+     *
+     * Only one kind of section hands the ball a clock — one that scrubs its
+     * own timeline — and where two such perches are adjacent they are two
+     * slices of that same timeline. Two different scrubbed sections could not
+     * be neighbours without a plain perch between them, so "both have a clock"
+     * is in practice "both have the same clock".
+     */
+    const sameClock = (a: number, b: number) =>
+      a >= 0 && b < sorted.length && !!sorted[a].progress && !!sorted[b].progress
+
+    /**
+     * Whether the ball has finished with perch `idx`, and whether it has
+     * arrived at it.
+     *
+     * Handing a section's clock to `perchK` fixed where the ball sits along a
+     * card. It did not fix *which* card: that was still decided by comparing
+     * the ball's smoothed scroll against the card's window, so the ball chose
+     * its card on one clock and placed itself on it with another. The chart
+     * scrubs at 0.8 against the ball's 0.12, which at reading speed is several
+     * hundred px of scroll apart, and the gap reverses sign with direction —
+     * so going down the two roughly agreed and coming up they did not. The
+     * ball switched to the next card while the chart still had the previous
+     * one open, and jumped 334px backwards in a single frame at full opacity.
+     *
+     * Where both sides of a handoff keep the same clock, both questions are
+     * now asked of that clock. Where they do not — a plain rule handing over
+     * to the chart, or the chart to the next rule — the scroll comparison is
+     * still the right one and is left alone.
+     */
+    const donePerch = (idx: number) =>
+      sameClock(idx, idx + 1) ? sorted[idx].progress!() >= 1 : smoothed >= bounds[idx * 2 + 1]
+
+    const arrived = (idx: number) =>
+      sameClock(idx - 1, idx) ? sorted[idx].progress!() >= 0 : smoothed >= bounds[idx * 2]
+
+    /**
+     * How far through a hop from perch `idx - 1` to perch `idx` the ball is.
+     *
+     * Between two perches on one clock this is "how far past the last one
+     * against how far short of the next", each measured on that clock — which
+     * is exactly 0 as the ball leaves and exactly 1 as it lands, in both
+     * directions, with no boundary that can move underneath it. For a plain
+     * pair the same expression reduces to the scroll fraction it has always
+     * been, which is what keeps every other hop matched to the scroll layout()
+     * budgeted for it.
+     */
+    const hopK = (idx: number, prevExit: number, span: number) => {
+      if (!sameClock(idx - 1, idx)) return clamp01((smoothed - prevExit) / span)
+      const wOut = Math.max(1, bounds[idx * 2 - 1] - bounds[idx * 2 - 2])
+      const wIn = Math.max(1, bounds[idx * 2 + 1] - bounds[idx * 2])
+      const out = Math.max(0, (sorted[idx - 1].progress!() - 1) * wOut)
+      const into = Math.max(0, -sorted[idx].progress!() * wIn)
+      return clamp01(out / Math.max(1, out + into))
     }
 
     /** Leaves the ball hidden and breaks the rotation chain. */
@@ -346,10 +723,11 @@ onMounted(() => {
       const y = smoothed
       const vh = window.innerHeight
       const vw = window.innerWidth
-      resolve(vh)
+      measure()
+      layout(vh)
 
       let i = 0
-      while (i < sorted.length && y >= bounds[i * 2 + 1]) i++
+      while (i < sorted.length && donePerch(i)) i++
 
       let cx: number
       let cy: number
@@ -359,10 +737,20 @@ onMounted(() => {
       let onPerch = false
       // Whether that surface is the ball's resting place.
       let atRest = false
+      // ...and whether the ball is still on its way down to it. The bottom fade
+      // exists to say "nothing left to ride, so fade rather than clip at the
+      // edge", and the resting perch is already exempt from it for the reason
+      // in FADE_PX's note — but the approach to it was not, so the last stretch
+      // of the fall dimmed to half strength and then snapped back to full on
+      // the frame it landed. The rule the footer rests it on sits low in the
+      // frame by design, so the arc onto it is inside the band for its final
+      // ~150px whatever else is done. A ball dropping onto its own resting
+      // place is no more "out of road" than one sitting on it.
+      let homing = false
 
       if (i >= sorted.length) {
         // Past the last perch — keep falling, out of the frame.
-        const last = sorted[sorted.length - 1]
+        const last = sorted.length - 1
         const k = (y - bounds[bounds.length - 1]) / (vh * EXIT_SCROLL_VH)
         // Once the fall is spent the ball is gone for good. Without this it
         // stays pinned to a departure point that is itself still scrolling
@@ -372,25 +760,29 @@ onMounted(() => {
           park()
           return
         }
-        const p = pointAt(last, last.to())
+        const p = pointAt(last, exitT(last))
         if (!p) return park()
         cx = p.x + 130 * k
         cy = p.y - ballR + vh * 1.15 * k * k
       } else {
         const enter = bounds[i * 2]
 
-        if (y >= enter) {
+        if (arrived(i)) {
           const perch = sorted[i]
-          const p = pointAt(perch, perchT(i))
+          const p = pointAt(i, perchT(i))
           if (!p) return park()
           cx = p.x
           cy = p.y - ballR
           launchFor = -1
           // Recorded here, while the surface is settled and being ridden, so
           // the hop off the end of it launches from the same place whichever
-          // way the page is being scrolled.
-          const ex = pointAt(perch, perch.to())
-          if (ex) exitAnchor[i] = ex.x
+          // way the page is being scrolled. Only for a surface whose shape is
+          // its section's business rather than the scrollbar's — see
+          // exitAnchor.
+          if (perch.progress) {
+            const ex = pointAt(i, exitT(i))
+            if (ex) exitAnchor[i] = ex.x
+          }
           onPerch = true
           atRest = perch.bounce
           // A landing is arriving on a perch that is not the one the ball was
@@ -411,21 +803,32 @@ onMounted(() => {
           // little before or after the section starts moving the surface, and
           // aiming at a fixed entry point would then step the moment the ball
           // switched from falling to riding.
-          const to = pointAt(sorted[i], perchT(i))
+          const to = pointAt(i, perchT(i))
           if (!to) return park()
+          homing = sorted[i].bounce
           const prev = i > 0 ? sorted[i - 1] : null
           const prevExit = prev ? bounds[i * 2 - 1] : enter - vh
-          const fromP = prev ? pointAt(prev, prev.to()) : { x: to.x - 90, y: to.y - vh * 0.5 }
+          const fromP = prev
+            ? pointAt(i - 1, exitT(i - 1))
+            : { x: to.x - 90, y: to.y - vh * 0.5 }
           if (!fromP) return park()
 
-          // The anchor recorded while the previous perch was ridden is the
-          // direction-independent answer; pinning on entry is the fallback for
-          // a perch this ball has never ridden — a mid-page load scrolled
-          // straight upward, or the first frame after a re-sort.
-          const anchored = prev ? exitAnchor[i - 1] : null
-          if (anchored !== null && anchored !== undefined) {
+          // A section that states its own exit point is the direction-
+          // independent answer and needs nothing else. The anchor recorded
+          // while the perch was ridden is the fallback for one that does not,
+          // and pinning on entry the fallback for a perch this ball has never
+          // ridden — a mid-page load scrolled straight upward, or the first
+          // frame after a re-sort. A perch with no clock of its own consults
+          // neither and needs neither: fromP was read live above and a surface
+          // that is not animating is already right.
+          const stated = prev?.exitX ? prev.exitX() : null
+          const held = stated ?? (prev?.progress ? exitAnchor[i - 1] : null)
+          if (held !== null && held !== undefined) {
             launchFor = i
-            launchX = anchored
+            launchX = held
+          } else if (prev && !prev.progress) {
+            launchFor = i
+            launchX = fromP.x
           } else if (launchFor !== i || launchX === null) {
             launchFor = i
             launchX = fromP.x
@@ -441,37 +844,26 @@ onMounted(() => {
             // work deck — is content it should pass behind the edge of,
             // not over.
             //
-            // Each leg is timed from the roll speed it joins, so the ball
-            // leaves at the pace it was rolling and arrives at the pace it is
-            // about to roll. That is the whole of what keeps this smooth: a
-            // fixed leg length would step the velocity at both ends.
+            // Each leg is the distance to the frame edge at CROSS_SPEED —
+            // the same rate every other crossing on the page runs at, and the
+            // same rate layout() reserved the scroll for. Whatever is left
+            // over between the two legs is time spent off-stage, where the
+            // ball's speed is nobody's business.
             const offR = vw + ballR * 4
             const offL = -ballR * 4
             const dOut = Math.max(1, offR - fromP.x)
             const dIn = Math.max(1, to.x - offL)
-            // Leaving: the perch being left is a settled surface, so its exit
-            // point and its roll speed are both steady and the departure slope
-            // can be matched to them exactly.
-            const sOut = rollSpeed(i - 1)
-            let legOut = gsap.utils.clamp(
-              SIDE_LEG_MIN,
-              SIDE_LEG_MAX,
-              sOut > 0.01 ? (SIDE_HASTE * dOut) / sOut : SIDE_LEG_MIN
-            )
+            let legOut = gsap.utils.clamp(SIDE_LEG_MIN, SIDE_LEG_MAX, dOut / CROSS_SPEED)
 
-            // Arriving: measured against TARGET_SPEED and a fixed fraction of
-            // the viewport, deliberately *not* against the perch being joined.
-            // The chart's first card is still opening while the ball is on its
-            // way to it, so its width — and therefore its measured roll speed
-            // and entry point — move every frame. A leg length derived from
-            // those moves the boundary `k` is counted from, and progress
-            // counted from a moving boundary does not advance smoothly, it
-            // jumps. Endpoints are free to move; the parameterisation is not.
-            let legIn = gsap.utils.clamp(
-              SIDE_LEG_MIN,
-              SIDE_LEG_MAX,
-              (SIDE_HASTE * vw * 0.5) / TARGET_SPEED
-            )
+            // Arriving: sized from the same constants rather than from the
+            // perch being joined, deliberately. The chart's first card is
+            // still opening while the ball is on its way to it, so its width
+            // — and therefore its measured roll speed and entry point — move
+            // every frame. A leg length derived from those moves the boundary
+            // `k` is counted from, and progress counted from a moving boundary
+            // does not advance smoothly, it jumps. Endpoints are free to move;
+            // the parameterisation is not.
+            let legIn = gsap.utils.clamp(SIDE_LEG_MIN, SIDE_LEG_MAX, dIn / CROSS_SPEED)
 
             // Neither leg may eat into the other; a short gap scales both.
             const legs = legOut + legIn
@@ -480,10 +872,14 @@ onMounted(() => {
               legIn *= span / legs
             }
 
-            // Recovered from the leg finally used, so clamping or scaling
-            // above cannot break the departure's slope match.
-            const cOut = gsap.utils.clamp(0.05, 1, (sOut * legOut) / dOut)
-            const cIn = SIDE_HASTE
+            // Slope match at each join, recovered from the leg finally used so
+            // clamping or scaling above cannot break it. The ball leaves the
+            // rule at exactly the pace it was rolling and lands on the next
+            // one at exactly the pace it is about to roll; with the legs now
+            // sized at CROSS_SPEED these are both near 1, so the quadratics
+            // are gentle rather than the catapult SIDE_HASTE made of them.
+            const cOut = gsap.utils.clamp(0.05, 1, (rollSpeed(i - 1) * legOut) / dOut)
+            const cIn = gsap.utils.clamp(0.05, 1, (ROLL_SPEED * legIn) / dIn)
 
             if (y <= prevExit + legOut) {
               // Still rolling, now off the right edge. Level, because it is a
@@ -501,7 +897,7 @@ onMounted(() => {
               return
             }
           } else {
-            const k = clamp01((y - prevExit) / span)
+            const k = hopK(i, prevExit, span)
 
             // Running off an edge carries no upward velocity, so the arc is a
             // plain parabola: x linear, y quadratic.
@@ -516,7 +912,52 @@ onMounted(() => {
             // early and commits the ball to where it is actually going.
             const kx = span > vh * 0.9 ? 1 - (1 - k) * (1 - k) : k
             cx = fromP.x + (to.x - fromP.x) * kx
-            cy = fromP.y - ballR + (to.y - fromP.y) * k * k
+
+            // A fall never aims below the frame. Both endpoints are read live,
+            // and early in a long hop the surface being aimed at is still
+            // under the fold — a whole viewport under it, on the crossing out
+            // of the hero. Aimed there, the ball dives off the bottom of the
+            // screen and rides back up as the target climbs into view, which
+            // is a third of a screen of nothing followed by a ball
+            // reappearing from below.
+            //
+            // Capped, the ball falls towards the bottom of the frame and the
+            // surface comes up to meet it, which is the same hop with the ball
+            // still in it. The cap cannot bind at the landing: a perch's window
+            // opens when its surface is in frame, so by k=1 the true target is
+            // above this line and the arc ends exactly on it.
+            const aim = Math.min(to.y, vh - ballR * 2)
+            // The height the surface was at when the ball left it, not the
+            // height it is at now.
+            //
+            // Read live, a fall is parameterised against a departure point that
+            // is itself travelling up the frame, and the k² term does not
+            // outgrow that until k = span/2Δ. For a short hop that is a few
+            // dozen px of lift nobody reads as anything; for a long one it is
+            // the whole first half of the arc spent going *up*. Measured on the
+            // fall into the footer at a 720px span: 260px of rise before the
+            // ball began to descend at all, which is why lengthening that fall
+            // barely slowed the landing — the descent was being squeezed into
+            // whatever was left.
+            //
+            // A surface that travels with the page has moved exactly as far as
+            // the page has since the handover, so `k * span` recovers where it
+            // was without capturing anything: the expression is constant across
+            // the whole fall, equals fromP.y at k=0 so it joins the roll
+            // continuously, and is the same value whichever direction the fall
+            // is entered from.
+            //
+            // Which is why it is opt-in rather than the default. A pinned
+            // surface has not moved with the page, so the same correction walks
+            // its origin *down* the frame instead of holding it: applied to the
+            // experience chart's last card, which is pinned, it steepened the
+            // hop onto the skills rule from 0.13 to 1.13px/px on the first
+            // frame. A pinned section states its exit height instead — see
+            // `exitY` and `holdExit` in useScrollBall.ts.
+            const originY = prev?.exitY
+              ? prev.exitY()
+              : fromP.y + (prev?.holdExit ? k * span : 0)
+            cy = originY - ballR + (aim - originY) * k * k
           }
         }
       }
@@ -530,9 +971,19 @@ onMounted(() => {
         // reads as floating.
         const t = (clock % REST_PERIOD) / REST_PERIOD
         cy -= REST_PX * Math.sin(t * Math.PI)
-        // Squash *is* the contact, so it is sharply concentrated at the ends
-        // of the hop and absent for the whole flight.
-        sy = 1 - REST_SQUASH * Math.abs(Math.cos(t * Math.PI)) ** 6
+        // Squash *is* the contact, so it is measured from the floor rather
+        // than from the phase. Distance to the nearer contact — 0 on the
+        // surface, 0.5 at the apex — cut off at REST_CONTACT so the ball is
+        // round for the whole flight and only deforms where it is touching.
+        //
+        // `cos(t·π)^n` was the previous shape and is the wrong one however
+        // high n goes: it is a curve over the entire hop, so some deformation
+        // always survives into the air, and the exponent needed to hide that
+        // makes the squash snap rather than land. A window has an edge.
+        const contact = Math.max(0, 1 - Math.min(t, 1 - t) / REST_CONTACT)
+        // Squared so it eases out of the floor instead of releasing linearly,
+        // which is the part that reads as the ball springing back.
+        sy = 1 - REST_SQUASH * contact * contact
       } else if (onPerch) {
         const bt = (clock - landAt) / BOUNCE_TIME
         if (bt >= 0 && bt < 1) {
@@ -573,7 +1024,7 @@ onMounted(() => {
       setO(
         Math.min(
           clamp01((cy + ballR) / FADE_PX),
-          atRest ? 1 : clamp01((vh - (cy - ballR)) / FADE_PX),
+          atRest || homing ? 1 : clamp01((vh - (cy - ballR)) / FADE_PX),
           clamp01((cx + ballR) / FADE_PX),
           clamp01((vw - (cx - ballR)) / FADE_PX)
         ) * intro.v

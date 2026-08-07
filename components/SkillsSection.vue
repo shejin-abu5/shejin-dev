@@ -34,16 +34,12 @@ const cards: SkillCard[] = [
   {
     category: 'Languages',
     icon: ['m9 8-4 4 4 4', 'm15 8 4 4-4 4', 'm13.5 6-3 12'],
-    stack: ['JavaScript (ES6+)', 'TypeScript', 'HTML5', 'CSS3', 'ES modules', 'JSON']
+    stack: ['JavaScript (ES6+)', 'TypeScript', 'HTML5', 'ES modules', 'JSON']
   },
   {
     category: 'Frameworks',
     icon: ['m12 3 8.5 4.5L12 12 3.5 7.5 12 3Z', 'm3.5 12 8.5 4.5 8.5-4.5', 'm3.5 16.5 8.5 4.5 8.5-4.5'],
-    stack: [
-      'Vue.js',
-      'React.js',
-      'Nuxt'
-    ]
+    stack: ['Vue.js', 'React.js', 'Nuxt']
   },
   {
     category: 'State management',
@@ -52,13 +48,7 @@ const cards: SkillCard[] = [
       'M5 6v12c0 1.4 2.9 2.5 7 2.5s7-1.1 7-2.5V6',
       'M19 12c0 1.4-2.9 2.5-7 2.5S5 13.4 5 12'
     ],
-    stack: [
-      'Pinia',
-      'Vuex',
-      'Redux',
-      'Reactive stores',
-     
-    ]
+    stack: ['Pinia', 'Vuex', 'Redux', 'Reactive stores']
   },
   {
     category: 'Styling',
@@ -66,27 +56,17 @@ const cards: SkillCard[] = [
       'M12 3.2c3.3 3.5 5.6 6.4 5.6 9.2a5.6 5.6 0 1 1-11.2 0c0-2.8 2.3-5.7 5.6-9.2Z',
       'M9.4 13.6a2.6 2.6 0 0 0 2.6 2.6'
     ],
-    stack: [
-      'Tailwind CSS',
-      'SASS',
-      'LESS',
-      'Design systems'
-      
-    ]
+    stack: ['Tailwind CSS', 'SASS', 'LESS', 'CSS3', 'Design systems']
   },
   {
     category: 'Animation',
     icon: ['M4 18C8.5 18 9 7 20 7', 'M20 5.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6Z'],
-    stack: [
-      'GSAP',
-      'WebGL',
-      'canvas'
-    ]
+    stack: ['GSAP', 'WebGL', 'canvas']
   },
   {
     category: 'Build tools',
     icon: ['M13.5 3 5.5 13.5h5.2L10 21l8-10.5h-5.2L13.5 3Z'],
-    stack: ['Webpack', 'Babel', 'NPM', 'Code splitting', 'Lazy loading', 'Asset optimization']
+    stack: ['Vite', 'Webpack', 'Babel', 'NPM', 'Code splitting', 'Lazy loading', 'Asset optimization']
   },
   {
     category: 'Developer tools',
@@ -103,12 +83,7 @@ const cards: SkillCard[] = [
       'M6.5 14.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
       'M17.5 9.5a8 8 0 0 1-8 8'
     ],
-    stack: [
-      'Git',
-      'GitHub',
-      'Code reviews',
-      'Branching workflows'
-    ]
+    stack: ['Git', 'GitHub', 'Code reviews', 'Branching workflows']
   },
   {
     category: 'Accessibility & localization',
@@ -118,15 +93,17 @@ const cards: SkillCard[] = [
       'M3.4 14.5h17.2',
       'M12 3c2.5 2.5 3.9 5.6 3.9 9s-1.4 6.5-3.9 9c-2.5-2.5-3.9-5.6-3.9-9s1.4-6.5 3.9-9Z'
     ],
-    stack: [
-      'WCAG 2.1',
-      'ARIA',
-      'Semantic HTML',
-      'Keyboard navigation',
-      'RTL-aware layouts',
-      'i18n'
-    ]
-  }
+    stack: ['WCAG 2.1', 'ARIA', 'Semantic HTML', 'Keyboard navigation', 'RTL-aware layouts', 'i18n']
+  },
+  {
+  category: 'AI Product Building',
+  icon: [
+    'M12 2 14 10 22 12 14 14 12 22 10 14 2 12 10 10Z',
+    'M19 3.5v3',
+    'M20.5 5h-3'
+  ],
+  stack: ['AI-assisted coding', 'UI design workflows', 'Rapid prototyping', 'Component scaffolding']
+}
 ]
 
 const CHEVRON = 'm6 9.5 6 6 6-6'
@@ -195,12 +172,27 @@ function toggle(i: number) {
 // match, keeping the pace the same as Selected Work's rule.
 useBallPerch(() => railRef.value, {
   trigger: () => railRef.value,
-  start: 'top 104%',
-  end: 'top 26%',
-  // Leaves from the middle of the rule rather than its right-hand end. What
-  // follows is a crossing to the Education column on the far left, and the
-  // shorter that crossing is the less the ball has to hurry to make it.
-  to: 0.5,
+  // In frame at both ends. At 104% the ball landed on a rule still below the
+  // fold; 92% lands it on one you can see.
+  start: 'top 92%',
+  end: 'top 34%',
+  // Lands halfway along and leaves from the far end — the opposite of what
+  // this used to do, and for the same reason it used to do the opposite.
+  //
+  // The thinking before was that leaving from the middle shortened the
+  // crossing to Education. It does not: that crossing goes off the right edge
+  // of the frame and comes back in at the left, so its length is the distance
+  // to the *right* edge plus the distance from the left, and stopping short of
+  // the right-hand end makes the first of those longer, not shorter. Measured
+  // at 1920: leaving at 0.5 costs 1694px of travel, leaving at 0.92 costs
+  // 1212px. The rule the ball gives up rolling across it gets back on the way
+  // out.
+  //
+  // Landing at 0.5 rather than 0 shortens the crossing *in* from the chart,
+  // which ends on the right-hand side of the frame — the ball no longer has to
+  // cross the whole width of the page to reach the start of this rule.
+  from: 0.5,
+  to: 0.92,
   // Sideways, for the same reason Selected Work's rule is: this rule sits
   // under the section *heading*, and the next perch is Education's hairline
   // the better part of a viewport and a half below it — with all nine skill
@@ -439,84 +431,48 @@ onMounted(() => {
    distinguishes one card from the next. Big enough to be the card's texture:
    it fills the whole upper half and runs off two edges.
 
-   The two presentations part company entirely below 1024px: in the grid this
-   is a cropped background wash, on the rail it is a foreground icon. Nine of
-   these tiled in a 3x3 is a different proposition from one at a time in a
-   swiped frame — the grid needs them to recede into a single grey field, and
-   the rail, where only one card is ever on screen, has both the room and the
-   attention for the glyph to be an actual mark that names the card.
+   One rule now, where this used to fork at 1024px. The rail ran a different
+   object below that line — a 60px accent icon sitting inside the card's
+   padding at full strength — on the argument that a 6%-of-ink smudge cannot be
+   read when only one card is on screen and would look like a printing fault.
+   What that traded away was the card's one accent: an orange glyph at icon
+   size competes with the category name instead of sitting behind it, and this
+   mark is meant to be the card's texture, not a second heading.
 
-   Only what both share sits here; each presentation sets its own geometry and
-   colour below. Neither block is unbounded, so there is no rule from one side
-   for the other to have to override. */
+   The geometry needs no fork either, because the cards are the same height on
+   both sides of the line — the back face sets it, and its chip list wraps to
+   three rows at 379px in the grid and at 326px on the rail alike, so both land
+   near 208px. 186px hung at -40/-49 crops the same way in both.
+
+   Steel rather than ink, at the opacity that keeps it a wash: 0.1 resolves to
+   #F0F1F1 on paper against the #F0F0F0 that ink at 0.06 gave — the same value,
+   half a step cooler. So this is a real change on the rail and a no-op in the
+   grid. */
 .skill-ghost {
   position: absolute;
-  pointer-events: none;
+  left: -40px;
+  top: -49px;
+  height: 186px;
+  width: 186px;
+  color: theme('colors.steel');
   /* Opacity, not `color`: the glyph is stroked with currentColor and the mark
-     is one flat tone either way, so shifting it on hover is a matter of how
-     much of the paper shows through rather than which shade it is. */
+     is one flat tone either way, so shifting it is a matter of how much of the
+     paper shows through rather than which shade it is. */
+  opacity: 0.1;
+  pointer-events: none;
+  /* Stroke width needs no override at either size, unlike the icon this
+     replaces: it is a fraction of the 24-unit viewBox, so the 0.4 in the
+     markup scales with the glyph instead of having to be re-set per size. */
   transition: opacity 0.45s ease;
-}
-
-/* The grid's mark: ink, bled off the top-left corner and clipped by the
-   radius, big enough to be the card's texture. */
-@media (min-width: 1024px) {
-  .skill-ghost {
-    left: -34px;
-    top: -30px;
-    height: 186px;
-    width: 186px;
-    color: theme('colors.ink');
-    opacity: 0.06;
-  }
-}
-
-/* Hover only where there is a real pointer — on touch this latches on tap and
-   stays lit after the card has already flipped away. */
-@media (min-width: 1024px) and (hover: hover) {
-  .skill-card:hover .skill-ghost {
-    opacity: 0.045;
-  }
-}
-
-/* The rail's mark, and a different object: a 60px icon sitting inside the
-   card's padding at full accent, not a tint of it.
-
-   A wash does not survive the move to a phone. It works in the grid because
-   nine of them make a field, and a field reads at strengths a single instance
-   cannot — alone in a swiped frame there is nothing for a 6%-of-ink smudge to
-   be read against, so it is either invisible or it looks like a printing
-   fault. At icon size the glyph has to carry on its own terms instead.
-
-   Absolute, so it stays out of the flex flow and the category row keeps its
-   `margin-top: auto` floor. Aligned to the face's own 1.375rem padding so it
-   hangs off the same left edge as the name below it. */
-@media (max-width: 1023px) {
-  .skill-ghost {
-    left: 1.375rem;
-    top: 1.375rem;
-    height: 60px;
-    width: 60px;
-    color: theme('colors.accent');
-    opacity: 1;
-    /* Stroke width is a fraction of the 24-unit box, so it scales with the
-       glyph and has to be re-set whenever the size moves — the 0.4 in the
-       markup is drawn for rendering at 186px. Here 1 renders ~2.5px: near
-       enough the chevron's weight (1.75 at 17px, ~2.4px) that the card's two
-       marks look drawn by the same hand, without the icon going spindly at
-       six times the chevron's size. */
-    stroke-width: 1;
-  }
 }
 
 /* Kept from when the mark sat in the bottom-left, on top of the category name:
    an absolutely-positioned element paints over in-flow content regardless of
    source order, and this lifts the row back above it. Still earning its place
-   with the mark back up top, in both presentations: in the grid it is 186px
-   tall against a card that floors at 134px, and on the rail the 60px icon
-   bottoms out at 82px against a row that starts around 78px on that same floor
-   card. Neither actually collides at the heights the back face forces in
-   practice, but both come close enough that the stacking should not be left to
+   with the mark back up top: the glyph is 186px tall against a card that
+   floors at 134px, so on a card sitting anywhere near that floor it reaches
+   the row. It does not collide at the heights the back face forces in
+   practice, but it comes close enough that the stacking should not be left to
    source order.
 
    `z-index` with no `position` is deliberate and not a mistake: the row is a

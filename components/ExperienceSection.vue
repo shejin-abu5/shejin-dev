@@ -419,6 +419,12 @@ onMounted(() => {
           const { start, end } = opens[i]
           return (state.p * totalU - start) / Math.max(1e-6, end - start)
         },
+        // Where this card ends when it is open, whatever it is drawing right
+        // now. `to: 1` is a fraction of the live rect and the live rect
+        // collapses behind the ball as it leaves, so on the way back up the
+        // hop off this card launched from the closed bar's edge instead of the
+        // card's. See `exitX` in composables/useScrollBall.ts.
+        exitX: () => chart.getBoundingClientRect().left + cards[i].right,
         // `landing` and `right` carry their own insets already.
         inset: 0
       })
@@ -674,7 +680,7 @@ onBeforeUnmount(() => {
     color: color-mix(
       in srgb,
       theme('colors.steel'),
-      theme('colors.accent-text') calc(var(--on, 0) * 100%)
+      theme('colors.black') calc(var(--on, 0) * 100%)
     );
   }
 
@@ -685,7 +691,7 @@ onBeforeUnmount(() => {
     width: 1px;
     height: calc(9px + var(--on, 0) * 6px);
     background: #cfcbc1;
-    background: color-mix(in srgb, #cfcbc1, theme('colors.accent') calc(var(--on, 0) * 100%));
+    background: color-mix(in srgb, #cfcbc1, theme('colors.black') calc(var(--on, 0) * 100%));
   }
 
   .gantt-chart {

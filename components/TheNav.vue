@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import logoUrl from '~/assets/img/brand/shejin-abu.png'
+
 const scrolled = ref(false)
 const menuOpen = ref(false)
 
@@ -33,9 +35,24 @@ const links = [
     :class="scrolled ? 'border-hair' : 'border-transparent'"
   >
     <div class="flex items-center justify-between">
-      <div class="font-display font-black text-[15px] uppercase tracking-wide">
-        Shejin Abu
-      </div>
+      <!--
+        The mark carries the name, so the image is decorative and the text
+        beside it is what screen readers announce — captioning both would
+        read the name twice.
+      -->
+      <a href="#" class="flex items-center gap-2.5" aria-label="Shejin Abu — home">
+        <img
+          :src="logoUrl"
+          alt="Shejin Abu"
+          aria-hidden="true"
+          width="44"
+          height="44"
+          class="h-7 w-7 shrink-0 md:h-11 md:w-11 object-contain"
+        />
+        <!-- <span class="font-display font-black text-[15px] uppercase tracking-wide">
+          Shejin Abu
+        </span> -->
+      </a>
 
       <div class="hidden md:flex gap-9 items-center">
         <a
@@ -52,7 +69,7 @@ const links = [
         <div
           class="flex items-center gap-1.5 rounded-full border border-hair px-3 py-1.5 sm:px-3.5"
         >
-          <span class="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+          <span class="h-1.5 w-1.5 rounded-full bg-green-300" aria-hidden="true" />
           <span class="font-data text-[11px] tracking-wide text-steel">
             Open to work
           </span>

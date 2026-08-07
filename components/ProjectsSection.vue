@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReveal } from '~/composables/useReveal'
-import { useBallPerch } from '~/composables/useScrollBall'
+import { BALL_QUERY, registerPerch, useBallPerch } from '~/composables/useScrollBall'
 import { useSwipeRail } from '~/composables/useSwipeRail'
 import newPatrolImg from '~/assets/img/works/new-patrol.webp'
 import partsImg from '~/assets/img/works/Genuine-Nissan-Parts-GHANA.webp'
@@ -119,34 +121,73 @@ const stackEnded = ref(false)
 const deckRef = ref<HTMLElement | null>(null)
 const { active, isRail, goTo } = useSwipeRail(() => deckRef.value, '.work-card')
 
-// One perch, and a short one. The ball falls out of the hero's headline onto
-// the rule under the section heading, rolls it, and rolls straight off the
-// right edge of the frame — it does not travel down over the deck. The cards
-// are the section; a ball crossing in front of them competes with the thing it
-// is meant to be leading you to, and riding a card's edge kept it on screen
-// for most of a tall section.
+// Where along the deck's width the walk starts and finishes. The heading rule
+// is its first step and the six cards are the rest, so the ball crosses the
+// section once, left to right, rather than resetting on every card.
 //
-// `side` is what keeps it off them: see composables/useScrollBall.ts. The exit
-// is timed from this roll's own speed, so leaving the frame is the same motion
-// as the roll, continued.
-// The window runs from below the fold to above it on purpose. The rule is a
-// full container wide, and crossing it at a pace that matches the rest of the
-// page takes about a screen of scroll — asking for that inside the visible
-// stretch alone is what made the ball bolt across. The edge fades cover the
-// approach and the departure, so the *seen* roll is the middle of it.
+// Left to right and not the other way, though the other way looked better on
+// paper: the experience chart starts at the left-hand end of its first card,
+// so a deck finishing on the left would hand over with almost no distance to
+// cover. What that ignores is that the last card has to *release* the ball
+// while it is still on screen. The deck scrolls away well before the chart
+// opens, and a ball still riding the last card at that point rides it up out
+// of the frame and then snaps back down into the middle of the screen when the
+// chart finally takes over — measured as a 120px jump appearing at full
+// opacity from nothing. Finishing on the right means the handoff can go off
+// the edge of the frame instead, which is what `side` is for.
+const DECK_FROM = 0.14
+const DECK_TO = 0.88
+
+// The ball rides down the deck: the rule under the section heading first, then
+// the top edge of each card as that card comes to the front of the stack.
+//
+// It used to roll off the right edge of the frame instead and stay off it
+// until the experience chart, on the reasoning that a ball crossing in front
+// of the cards competes with the thing it is meant to be leading you to. What
+// that cost, measured, was three viewports of scroll — a third of the page —
+// with no ball on screen at all, which is a longer absence than the journey
+// can carry. Riding the deck keeps it present without putting it over any
+// copy: a card's top edge is its border, and the ball sits on it.
+//
+// The rule is the first step of that walk and the cards are the rest — see
+// DECK_FROM — so the whole section reads as one crossing rather than seven.
 useBallPerch(() => railRef.value, {
   trigger: () => railRef.value,
-  start: 'top 106%',
-  end: 'top 2%',
-  // Stops short of the rule's right-hand end. The window here is already a
-  // whole viewport of scroll and cannot grow — the rule leaves the frame —
-  // so the only way to take the pace down is to give the ball less of the
-  // rule to cross in it.
-  to: 0.72,
-  side: true
+  // In frame, not below it. At 106% the ball landed on a rule that was still
+  // a screen's-worth under the fold, so it spent the fall diving to meet it —
+  // measured at 3.3px of descent per px of scroll, down to within 70px of the
+  // bottom edge — and then rode back up as the rule came into view. A ball
+  // that plunges off the bottom of the screen and returns is not a hop, and it
+  // was the one place on the page where the vertical read faster than the
+  // horizontal. Landing on a rule that is already in frame makes the fall a
+  // fall.
+  start: 'top 88%',
+  // A quarter of the frame, not the 86% of it this used to claim.
+  //
+  // The window a section declares is not free. layout() spends the scroll in a
+  // run on the legs that need it, but it also walks backwards from the end of
+  // the run working out what every perch after this one is owed — and a perch
+  // may not be handed the ball later than that arithmetic allows, even when its
+  // own trigger says it should be. A fat declaration here is therefore charged
+  // against the *fall into it*: measured at 1920×1080, this rule's 928px window
+  // for a 165px roll (0.19px per px of scroll, a quarter of the cruise) forced
+  // the hop out of the hero to land ~620px before this trigger's own `top 88%`,
+  // which is a rule still half a screen under the fold. The dive off the bottom
+  // of the frame the comment above describes was never fixed by moving the
+  // start line; it was only moved out of this section's own arithmetic.
+  //
+  // Short enough that the roll runs near ROLL_SPEED and the slack goes back to
+  // the fall, which is the leg that has somewhere to be.
+  end: 'top 62%',
+  // One step's worth, handing straight on to the first card. How long that
+  // takes is no longer this section's business — the ball paces its own
+  // journey now, and will give the roll the scroll it needs or shorten the
+  // roll if the page has none to give. See layout() in TheScrollBall.vue.
+  to: DECK_FROM
 })
 
 let stackEndObserver: IntersectionObserver | null = null
+let deckMedia: ReturnType<typeof gsap.matchMedia> | null = null
 
 onMounted(() => {
   // Cards rise into view through the blur band, which owns the bottom ~22vh.
@@ -182,10 +223,75 @@ onMounted(() => {
   )
 
   stackEndObserver.observe(sentinel)
+
+  // One perch per card, gated on the same query the ball itself is gated on so
+  // the two can never disagree about whether the journey is running. Below lg
+  // the deck is a swipe rail and none of this exists.
+  //
+  // registerPerch rather than useBallPerch because a card's window is not
+  // expressible as one trigger's start and end: a card is the front of the
+  // deck from the moment it sticks until the *next* card sticks over it, which
+  // is two different elements' geometry.
+  deckMedia = gsap.matchMedia()
+  deckMedia.add(BALL_QUERY, () => {
+    const deck = Array.from(cardEls)
+    if (deck.length < 2) return
+
+    // Read off the element rather than recomputing `--band + index * 10px` by
+    // hand, so the stacking offset stays defined in exactly one place. Called
+    // per refresh, so a viewport change that moves the band re-resolves it.
+    const stickAt = (i: number) => parseFloat(getComputedStyle(deck[i]).top) || 0
+
+    const sts = deck.map((el, i) =>
+      ScrollTrigger.create({
+        trigger: el,
+        start: () => `top top+=${stickAt(i)}`,
+        // The card that covers this one ends it. The last has nothing above
+        // it, so it holds the ball until the deck itself is leaving.
+        endTrigger: i + 1 < deck.length ? deck[i + 1] : el,
+        end:
+          i + 1 < deck.length
+            ? () => `top top+=${stickAt(i + 1)}`
+            : () => `+=${Math.round(window.innerHeight * 0.5)}`
+      })
+    )
+
+    const step = (i: number) => DECK_FROM + (DECK_TO - DECK_FROM) * (i / deck.length)
+
+    const offs = deck.map((el, i) =>
+      registerPerch({
+        surface: () => el,
+        range: () => [sts[i].start, sts[i].end],
+        // Each card carries the ball one step of the way across, so the deck
+        // reads as one continuous walk rather than six rolls that each reset
+        // to the left-hand edge.
+        from: () => step(i),
+        to: () => step(i + 1),
+        // A card sits 10px below the one it covers, so the hop between them is
+        // a step down rather than a fall, and the default crossing — sized for
+        // getting between sections — would hang the ball in the air over it.
+        fall: 0.07,
+        // The last card hands over to the experience chart, which is a whole
+        // section away and starts at the left-hand edge again. Off the right
+        // of the frame and back in at the left, rather than an arc across
+        // everything in between — and it has to leave while the card is still
+        // in frame, since the deck scrolls away long before the chart opens.
+        side: i === deck.length - 1,
+        // Clear of the 22px corner radius.
+        inset: 26
+      })
+    )
+
+    return () => {
+      for (const off of offs) off()
+      for (const st of sts) st.kill()
+    }
+  })
 })
 
 onBeforeUnmount(() => {
   stackEndObserver?.disconnect()
+  deckMedia?.revert()
 })
 </script>
 
