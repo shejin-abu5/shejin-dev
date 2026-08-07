@@ -53,6 +53,78 @@ export interface Perch {
    * is right for a surface that just sits in the page.
    */
   progress?: () => number
+  /**
+   * Where the ball leaves this perch, as an absolute viewport x, for a surface
+   * whose shape is driven by its section's own timeline.
+   *
+   * `to` is a fraction of the surface's live rect, which is the right answer
+   * for a surface that has one shape. A chart card does not: it opens as the
+   * ball arrives and closes as the ball leaves, so a fraction of its live rect
+   * is a moving point, and the hop off the end of it launches from wherever
+   * that card happened to be at the moment the hop began. Downwards that is a
+   * card still fully open and the answer is right; upwards the same hop is
+   * entered off a card that has already closed, and the launch point is the
+   * collapsed bar's right edge — measured at 651px against the open card's
+   * 992px, so the ball spent the hop drifting towards a point a third of the
+   * frame from where it belonged, then snapped when it landed.
+   *
+   * A section that animates its surfaces knows where the open one ends
+   * regardless of what it is currently drawing. Where it says so here, the ball
+   * uses it and the hop launches from the same place in both directions.
+   */
+  exitX?: () => number
+  /**
+   * Where the ball leaves this perch, as an absolute viewport y, for a surface
+   * that is pinned while the ball is on it.
+   *
+   * The vertical counterpart of `exitX`, and it exists for the mirror-image
+   * reason. A fall reads both its endpoints live, which is what keeps short
+   * hops continuous while the surfaces underneath them are still settling — a
+   * surface in normal flow rises at the page's own speed, the target rises with
+   * it, and the arc between them is unaffected.
+   *
+   * A pinned surface does not. It holds still for as long as its section is
+   * pinned and then leaves at full scroll speed, and a fall long enough to
+   * outlast the pin is anchored to a departure point that is accelerating away
+   * upwards. Measured on the hero: the headline unpins 437px into a 1404px
+   * fall, and from there the live origin dragged the ball 118px back *up* the
+   * frame before the k² term grew enough to overcome it — a hop that visibly
+   * reverses direction in mid-air. It is the same failure the skills rail
+   * escapes by going sideways, at a scale small enough to look like a wobble
+   * rather than a bug.
+   *
+   * A pinned section knows the height it holds the ball at regardless of where
+   * the page has scrolled to, because that height is measured against its own
+   * pinned frame rather than against the viewport. Where it says so here, the
+   * fall launches from one fixed point and the arc is monotone in both
+   * directions — which capturing the live value on entry could never be, since
+   * a fall entered from below is entered at k≈1, long after the surface has
+   * gone.
+   *
+   * Omit it for a surface that travels with the page, which is the normal case
+   * and already correct read live.
+   */
+  exitY?: () => number
+  /**
+   * `exitY` for a surface that travels with the page: hold the fall's launch
+   * height, but let the ball work out what it was rather than stating it.
+   *
+   * Same problem, opposite surface. A fall reads its origin live, and until
+   * k = span / 2Δ the k² term is growing more slowly than that origin is
+   * climbing, so the ball rises before it falls. Below a viewport of span that
+   * is a few dozen px and reads as follow-through; past it, it is most of the
+   * arc. The fall onto the footer at a 720px span rose 260px before it began
+   * to descend at all, which is why lengthening that fall did almost nothing
+   * for the landing — every extra px of scroll went into a taller lob and the
+   * descent stayed squeezed into the end.
+   *
+   * A surface in normal flow has moved exactly as far as the page has, so the
+   * height it handed the ball over at is recoverable from how far into the fall
+   * the ball is. Nothing is captured, so it is the same value going up as going
+   * down. Set it on a perch whose next hop is long enough to matter; `exitY`
+   * takes precedence where a section states one.
+   */
+  holdExit?: boolean
   /** Px pulled in from each end, so the ball can sit clear of a rounded corner. */
   inset: number
   /**
@@ -118,6 +190,9 @@ export function registerPerch(spec: {
   from?: Fraction
   to?: Fraction
   progress?: () => number
+  exitX?: () => number
+  exitY?: () => number
+  holdExit?: boolean
   inset?: number
   side?: boolean
   fall?: number
@@ -129,6 +204,9 @@ export function registerPerch(spec: {
     from: asFn(spec.from, 0),
     to: asFn(spec.to, 1),
     progress: spec.progress,
+    exitX: spec.exitX,
+    exitY: spec.exitY,
+    holdExit: spec.holdExit ?? false,
     inset: spec.inset ?? 14,
     side: spec.side ?? false,
     fall: spec.fall ?? null,
@@ -166,6 +244,9 @@ export function useBallPerch(
     end?: string | number | (() => string | number)
     from?: Fraction
     to?: Fraction
+    exitX?: () => number
+    exitY?: () => number
+    holdExit?: boolean
     inset?: number
     side?: boolean
     fall?: number
@@ -198,6 +279,9 @@ export function useBallPerch(
         range: () => [st.start, st.end],
         from: opts.from,
         to: opts.to,
+        exitX: opts.exitX,
+        exitY: opts.exitY,
+        holdExit: opts.holdExit,
         inset: opts.inset,
         side: opts.side,
         fall: opts.fall,

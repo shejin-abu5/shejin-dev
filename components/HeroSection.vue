@@ -17,9 +17,10 @@ const INTRO_SEGMENTS: { text: string; accent?: boolean }[] = [
   { text: 'Vue.js and React.js.', accent: true },
   {
     text:
-      '10+ years shaping enterprise and automotive platforms across the Middle East and Africa for brands like'
+      '10+ years shaping enterprise and automotive platforms across the'
   },
-  { text: "Nissan, Ford and INFINITI.", accent: true }
+  { text: 'Middle East and Africa regions.', accent: true },
+  //{ text: "Nissan, Ford and INFINITI.", accent: true }
 ]
 
 // One span per word is what the scroll wipe animates. Flattened at module
@@ -43,6 +44,72 @@ const SLOGAN_SEGMENTS: { text: string; class?: string }[] = [
 // text the first time a word here changes.
 const SLOGAN_LENGTH = SLOGAN_SEGMENTS.reduce((total, s) => total + s.text.length, 0)
 
+// Where along the frame the mark has to still be when it hands the ball over.
+// Wide enough to clear TheScrollBall's own FADE_PX band at the left edge, so
+// the ball leaves the headline at full strength rather than as a sliver, with
+// the floor covering the narrowest viewport the journey runs at.
+const HERO_LEAVE_X = () => Math.max(0.2 * window.innerWidth, 210)
+
+// And how far left the *fall* may still be dragged by the mark after that.
+//
+// The hop launches from wherever the mark currently is, which is what carries
+// the ball's leftward roll into the air instead of stopping it dead at the
+// handover. It works because the mark is normally still in frame — but the mark
+// travels `track.offsetWidth - innerWidth + gutter*2`, and the narrower the
+// viewport the larger that is relative to the frame: at 1280×800 it is 1176px
+// in a 1280px frame, so the mark finishes at x=-119 and took the ball with it,
+// off the edge at zero opacity for 240px of scroll. Held here, the follow-
+// through survives and the launch point simply stops when the mark has nothing
+// left to give.
+const HERO_HOLD_X = () => Math.max(0.09 * window.innerWidth, 120)
+
+// How far the phone's ball turns across the hero's pinned read — see .hero-orb.
+//
+// It stays where it is put and only spins, so this is a rate rather than a
+// consequence: there is no surface travelling under it to derive a rotation
+// from, the way the scroll ball derives one from the distance it has rolled.
+//
+// A turn and a half over ~66vh of scroll. Enough that a flick produces obvious
+// movement — the whole point, since a ball that turns imperceptibly is the idle
+// loop this replaced — and little enough that the poles stay readable as poles
+// instead of smearing into a band.
+//
+// Negative, because that is the direction everything else in this frame is
+// going: the headline slides left for the whole of the same window, and a ball
+// turning the other way reads as fighting it.
+const ORB_SPIN = -540
+
+/**
+ * The scroll at which the mark's centre reaches HERO_LEAVE_X, as a ScrollTrigger
+ * end offset. Re-invoked on every refresh, so a resize re-resolves it.
+ *
+ * Every term is measured off the same elements the slide itself is measured off
+ * — see `distance` in the pinned read below — because the slide is what this is
+ * describing. offsetWidth/offsetLeft rather than getBoundingClientRect for the
+ * usual reason: they ignore the transform GSAP has on the track, so this reads
+ * the untransformed layout whatever the page has scrolled to.
+ */
+const heroPerchEnd = () => {
+  const wrap = wrapRef.value
+  const track = trackRef.value
+  const mark = markRef.value
+  const frame = wrap?.querySelector<HTMLElement>('.hero-frame')
+  const pad = wrap?.querySelector<HTMLElement>('.hero-pad')
+  if (!wrap || !track || !mark || !frame || !pad) return `+=${Math.round(window.innerHeight)}`
+
+  const scrub = Math.max(1, wrap.offsetHeight - frame.offsetHeight)
+  const gutter = parseFloat(getComputedStyle(pad).paddingLeft) || 0
+  const distance = Math.max(1, track.offsetWidth - window.innerWidth + gutter * 2)
+  // The track is the mark's offsetParent (it is the `relative` box), and it
+  // starts flush with the gutter, so this is the mark's centre before the
+  // slide has moved it.
+  const startX = gutter + mark.offsetLeft + mark.offsetWidth / 2
+  // Floored, so a viewport wide enough that the mark never reaches the leave
+  // point still gives the ball a headline to ride rather than no window at all.
+  const frac = gsap.utils.clamp(0.35, 1, (startX - HERO_LEAVE_X()) / distance)
+  return `+=${Math.round(scrub * frac)}`
+}
+
 // The ball's home. It sits centred on the mark — `from` and `to` are the same
 // point — so it is carried by the heading as that slides left rather than
 // rolling along a 9vw rule, which at this length would be a twitch. The
@@ -52,19 +119,85 @@ const SLOGAN_LENGTH = SLOGAN_SEGMENTS.reduce((total, s) => total + s.text.length
 // headline before a single pixel of scroll. It ends well short of the hero's
 // own end for a concrete reason: the mark travels a full viewport left, and by
 // the hero's last third it has carried the ball off the left edge of the
-// screen. Leaving after ~1.35 screens drops the ball while it is still in
-// frame, and lands it near the left end of the rule it falls onto.
+// screen.
+//
+// One screen, not the 1.35 this used to be. The mark reaches the left edge at
+// almost exactly a screen of scroll, and the extra third bought nothing but a
+// dead stretch: measured, the ball spent 350px of scroll parked at x=1 — a
+// sliver at 13% opacity, pinned against the edge, not rolling, while the page
+// went on scrolling underneath it. Ending here drops the ball while the mark
+// is still in frame, which is what the fall is supposed to launch from, and
+// hands those 350px to the fall onto the rule below instead.
 //
 // Expressed as an offset from the start rather than as a fraction of the
 // trigger: `bottom-=55%` reads as "earlier" and is not — it moves the viewport
 // marker, which pushes the end *later*.
+//
+// And derived rather than declared, because "a screen of scroll" is not what
+// this end is about. What it is about is the mark reaching the left edge, and
+// how much scroll that takes is set by the mark's travel — a fluid heading
+// width against the viewport — which no fraction of viewport *height* tracks.
+// One screen was right at 1920×1080 and wrong at 1280×800, where the same rule
+// rode the ball to x=-75 and held it off-screen at zero opacity for 400px of
+// scroll before the fall had even started. Below is the scroll at which the
+// mark's centre reaches HERO_LEAVE_X, from the same geometry the scrub itself
+// is measured against, so the two cannot drift apart.
 useBallPerch(() => markRef.value, {
   trigger: () => wrapRef.value,
   start: 'top top',
-  end: () => `+=${Math.round(window.innerHeight * 1.35)}`,
+  end: heroPerchEnd,
   from: 0.5,
   to: 0.5,
-  inset: 0
+  inset: 0,
+  // The fall off the mark is the longest crossing on the page and the only one
+  // that has to clear a whole section — the bio and the slogan sit between the
+  // headline and Selected Work's rule — so it is the one perch that has to ask
+  // for more than the ball's default rather than less. Every other use of
+  // `fall` on the site shortens a hop; this one lengthens it.
+  //
+  // Left at the default 0.3vh it got 324px of scroll to cover ~1100px of
+  // descent. Measured at 1920×1080: the ball accelerated to 2.5px of drop per
+  // px of scroll, hit the cap that stops a fall aiming below the frame, then
+  // jumped 540px in a single frame onto a rule that was still 500px under the
+  // fold — and stayed invisible for the next ~600px of scroll while that rule
+  // climbed into view. The cap is written on the assumption that a perch's
+  // window opens once its surface is in frame; the run from here to the
+  // experience chart is scroll-tight enough that layout() was handing the rule
+  // over ~620px before its own `top 88%` said to, which is what breaks that
+  // assumption.
+  //
+  // 1.3 is not a free choice. The document gap from the mark to that rule is
+  // ~1760px and the ball starts the fall not quite half a screen down, so it
+  // has ~560px of frame to descend through — which fixes the scroll at no less
+  // than 1200px if the landing is to happen in frame at all, and a little more
+  // than that if it is to happen clear of the bottom fade band. Crossings are
+  // paid before rolls, so it comes out of the slack the rolls in between
+  // declared on top of what they need, not out of how much of any surface the
+  // ball rides: measured after, every `ride` in the run is still 1.
+  fall: 1.3,
+  // Live, and only floored — not pinned. Stating a fixed exit here would stop
+  // the ball's leftward roll dead at the handover, a 1.34px/px roll becoming a
+  // 0.27px/px drift between one frame and the next. Tracking the mark keeps the
+  // follow-through; the floor keeps it in frame. See HERO_HOLD_X.
+  exitX: () => {
+    const mark = markRef.value
+    if (!mark) return HERO_HOLD_X()
+    const r = mark.getBoundingClientRect()
+    return Math.max(r.left + r.width / 2, HERO_HOLD_X())
+  },
+  // Measured against the sticky frame rather than the viewport, which is what
+  // makes it a constant: while the frame is pinned its own top is 0 and this is
+  // just the mark's height on screen; once it unpins both tops fall together
+  // and the difference is unchanged. So it answers "how high was the ball when
+  // it left the headline" at any scroll position, including the ones long past
+  // the point the headline itself has gone.
+  exitY: () => {
+    const mark = markRef.value
+    const frame = wrapRef.value?.querySelector('.hero-frame')
+    if (!mark) return 0
+    const top = mark.getBoundingClientRect().top
+    return frame ? top - frame.getBoundingClientRect().top : top
+  }
 })
 
 let mm: gsap.MatchMedia | null = null
@@ -219,9 +352,14 @@ onMounted(() => {
   // Nothing here is width-aware, and that is deliberate: the phone runs the
   // identical timeline, and the only thing that differs is how much scroll it
   // is scrubbed against. That lives in one place — the spacer's height in the
-  // template, 170vh against the desktop's 300vh — so the read is the same
-  // motion, roughly twice as quick to get through. Putting the difference in a
+  // template, 166vh against the desktop's 200vh — so the read is the same
+  // motion, quicker to get through on the phone. Putting the difference in a
   // second JS branch instead would be two timelines to keep in step.
+  //
+  // What matters is the spacer minus the frame, since that difference is what
+  // the scrub is mapped over: 100vh of pinned scroll on desktop, ~66vh on the
+  // phone. Raising the spacer does not slow the slide down so much as stretch
+  // the same travel over more wheel, which is what reads as dead scroll.
   mm.add('(prefers-reduced-motion: no-preference)', () => {
     const wrap = wrapRef.value
     const track = trackRef.value
@@ -283,6 +421,51 @@ onMounted(() => {
       { clipPath: 'inset(0 0% 0 0)', ease: 'none', scrollTrigger }
     )
   })
+
+  // The phone's ball, spinning. What it replaces was a CSS keyframe loop, and
+  // the complaint about that one is exactly right: it hopped at 1.5s whatever
+  // the page was doing, so it was the one thing in the hero that did not answer
+  // to the scrollbar. Everything around it — the slide, the ink, the ball on
+  // desktop — is scrubbed, and a loop next to that reads as a spinner.
+  //
+  // The ball itself does not move. It holds the middle of the frame for the
+  // whole of the pinned read and only turns, which is what the read is: the
+  // heading travels a viewport and a half across a ball that stays put. Give
+  // the ball a path of its own and there are two things moving past each other
+  // and no fixed point to read either against.
+  //
+  // Scrubbed against the same window as the slide, and at the same 0.5, so the
+  // two are smoothed identically and the ball stops turning on the same frame
+  // the heading runs out of travel. Below `md` only: the real scroll ball takes
+  // the job over from 1024px up, and between the two there is no gap to fill.
+  mm.add('(max-width: 767px) and (prefers-reduced-motion: no-preference)', () => {
+    const wrap = wrapRef.value
+    const frame = wrap?.querySelector<HTMLElement>('.hero-frame')
+    const spin = wrap?.querySelector<HTMLElement>('.hero-orb-spin')
+    if (!wrap || !frame || !spin) return
+
+    // Only the spin layer, never the ball. The ball carries the `translateX`
+    // that centres it on its CSS `left`, and the sphere's own shading has to
+    // stay put while the marks on top of it turn — light does not orbit with a
+    // ball. See .hero-orb-spin.
+    gsap.fromTo(
+      spin,
+      { rotation: 0 },
+      {
+        rotation: ORB_SPIN,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: wrap,
+          start: 'top top',
+          // The slide's own end, written out again rather than shared: the
+          // block above resolves it inside its own matchMedia scope.
+          end: () => `+=${Math.max(1, wrap.offsetHeight - frame.offsetHeight)}`,
+          scrub: 0.5,
+          invalidateOnRefresh: true
+        }
+      }
+    )
+  })
 })
 
 onUnmounted(() => {
@@ -291,11 +474,25 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="wrapRef" class="hero-scroll h-[116vh] md:h-[300vh]">
+  <div ref="wrapRef" class="hero-scroll h-[166vh] md:h-[200vh]">
     <header
       class="hero-frame sticky top-0 flex h-screen flex-col justify-center overflow-hidden pt-[70px] md:pt-0"
     >
       <div class="hero-pad w-full px-5 md:-translate-y-[6vh] md:px-8">
+        <!-- The phone's stand-in for the scroll ball, which does not run below
+             1024px — see BALL_QUERY. Not a copy of the journey, which needs a
+             column of rules to land on that a phone layout does not have, but
+             the same object where that journey starts it: centred on the
+             headline, with the type passing across it as the track slides.
+
+             First in the box, and the only reason it is inside .hero-pad at all
+             — both it and .hero-track are positioned with no z-index, so paint
+             order is DOM order and the heading lands on top of the ball without
+             a stacking context anywhere. -->
+        <div class="hero-orb md:hidden" aria-hidden="true">
+          <span class="hero-orb-ball"><span class="hero-orb-spin" /></span>
+        </div>
+
         <div ref="trackRef" class="hero-track relative grid w-max will-change-transform">
           <component
             :is="layer === 'ink' ? 'h1' : 'div'"
@@ -337,7 +534,12 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="hero-cta mt-9 flex flex-wrap items-center gap-2.5 px-5 md:hidden">
+      <!-- The outline button carries `bg-paper` rather than relying on the page
+           behind it: the ball is centred on the heading and reaches ~20px into
+           this row, and an unfilled pill let its arc run straight through the
+           button. On white the fill changes nothing, and this row is md:hidden,
+           so white is the only background it has ever had. -->
+      <div class="hero-cta top-[6em] flex flex-wrap items-center gap-2.5 px-5 md:hidden">
         <a
           href="mailto:shejin.abu@gmail.com"
           class="inline-flex min-h-[46px] items-center rounded-full bg-ink px-5 font-data text-[13px] text-paper transition-colors hover:bg-accent-text"
@@ -347,7 +549,7 @@ onUnmounted(() => {
         <a
           href="/files/Shejin-Abux1.pdf"
           download="Shejin-Abu-CV.pdf"
-          class="inline-flex min-h-[46px] items-center rounded-full border border-hair px-5 font-data text-[13px] text-ink transition-colors hover:border-ink"
+          class="inline-flex min-h-[46px] items-center rounded-full border border-hair bg-paper px-5 font-data text-[13px] text-ink transition-colors hover:border-ink"
         >
           Download CV
         </a>
@@ -356,6 +558,8 @@ onUnmounted(() => {
   </div>
 
   <section ref="introRef" class="hero-intro" aria-label="Introduction">
+    
+
     <p class="hero-intro-copy">
       <span
         v-for="(item, i) in INTRO_WORDS"
@@ -365,7 +569,7 @@ onUnmounted(() => {
       >{{ item.word }}</span>
     </p>
 
-    <p ref="sloganRef" class="hero-slogan">
+            <p ref="sloganRef" class="hero-slogan">
       <span class="hero-slogan-line">
         <span class="hero-slogan-ink"><span
           v-for="(segment, i) in SLOGAN_SEGMENTS"
@@ -375,50 +579,149 @@ onUnmounted(() => {
         <span class="hero-slogan-caret" aria-hidden="true" />
       </span>
     </p>
+
+
   </section>
 </template>
 
 <style scoped>
-/* Mobile only, and an override of the `h-screen` in the template rather than a
-   refinement of it.
+/* Mobile only. The frame itself is left at the template's `h-screen`; what is
+   set here is what the phone puts in the half of that screen the headline does
+   not use.
 
-   A full screen is the wrong frame for this composition on a phone. What it
-   holds is one line of heading and a button row — about 140px — so a 844px
-   frame is 700px of air whichever end it is put at: centred it sits above the
-   headline, biased upward it piles below and reads as a void between the hero
-   and the bio. There is no split of 700px that reads as anything but a gap;
-   the only answer is for the frame to stop being a screen.
+   This used to be a 50svh frame, on the reasoning that a full screen holds one
+   line of heading and a button row — about 140px — and 700px of air is a gap
+   wherever it is put. The reasoning was sound and the conclusion was wrong,
+   because a frame shorter than the viewport cannot fill it while pinned: for
+   `spacer − frame` of scrolling there was nothing under the headline but the
+   spacer, up to 66vh of it, and the bio only closed the distance on the very
+   last frame of the pin. The gap moved, it did not go.
 
-   50svh is that frame sized to its contents: the nav's 70px of clearance, the
-   140px it holds, and ~110px to close on. The consequence is deliberate and
-   worth stating, because it is the thing that looks like a bug if it is not
-   expected — a frame shorter than the viewport cannot fill it while pinned, so
-   for `viewport − frame` of scrolling the bio is on screen underneath the
-   headline while the headline is still sliding. That is not dead space; it is
-   the space the gap used to be.
+   A full screen has the opposite property: while the frame is pinned it *is*
+   the viewport, so there is no scroll position at which anything empty can show
+   underneath it. The air is then inside a composition rather than between two
+   of them, which is the whole difference — a centred heading with the ball
+   behind it reads as placed on a field, where the same heading with a strip of
+   spacer under it reads as having run out. 100vh rather than svh on purpose:
+   svh is the height with the URL bar out, so on the taller layout the frame
+   would come up short and hand back a strip of the spacer, which is the bug
+   this is fixing. Overshooting instead only crops the air below the ball.
 
-   Shortening it is only safe because the scrub's end is measured off this
-   element — see `scrollTrigger` in <script>. Against the old `bottom bottom`
-   the heading would finish sliding and then hold, pinned and still, for the
-   ~300px between the two.
-
-   `svh` is the small viewport — the height with the URL bar *out* — so the
-   frame holds rather than being cropped when it is. The vh line above it is
-   the fallback for engines without `svh`, which is why this is plain CSS and
-   not a Tailwind arbitrary value. */
+   The spacer moves with it: the pinned scrub is `spacer − frame` (see
+   `scrollTrigger` in <script>), so 116vh over a 50svh frame and 166vh over a
+   full one are the same ~66vh of slide. Change one without the other and the
+   heading's travel speeds up or slows down. */
 @media (max-width: 767px) {
-  .hero-frame {
-    height: 50vh;
-    height: 50svh;
+  /* The box the ball is centred on. .hero-track inside it is already
+     `relative`, so this changes nothing about the slide — it only gives the
+     absolutely placed ball a containing block that is the heading's own row
+     rather than the whole frame, which is what keeps the two centred on each
+     other at any height. */
+  .hero-pad {
+    position: relative;
   }
 
-  /* The hero already closes on ~110px of its own air, so the section's usual
-     opening pad would be stacking a second gap on top of a first. Above `md`
-     it stays as it was — there the hero ends on a screen of deliberate air and
-     this is the only thing separating the two. */
+  /* And this is the other half of that: the ball is centred on the heading and
+     is taller than it, so its foot reaches ~20px into the button row below.
+     Positioning .hero-pad above makes it a positioned box, and positioned boxes
+     paint after in-flow ones whatever the DOM order — so without this the ball
+     covers the top of both buttons. `relative` with no offset puts .hero-cta
+     back in front of it on the strength of coming later. */
+  .hero-cta {
+    position: relative;
+  }
+
+  /* The section's usual opening pad, halved. The hero closes on a screen of
+     air either way; above `md` this is left alone, because there the pinned
+     frame is the only thing separating the two. */
   .hero-intro {
     padding-top: 1rem;
   }
+}
+
+/* Centred on the heading's row, in both axes, and behind it.
+
+   Vertically on .hero-pad rather than on the frame: the heading is centred in a
+   flex column whose contents and padding both change with the viewport, so the
+   frame's middle and the heading's middle are not the same point and only one
+   of them is the one the ball has to agree with.
+
+   Horizontally on the viewport, which means it holds still while the track
+   slides across it. That is the whole read — the type travels, the ball does
+   not — and it is also why the ball is not anchored to anything inside the
+   track: the track's own middle is a viewport and a half wide and leaves the
+   frame entirely. */
+.hero-orb {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+}
+
+/* Centred on that point rather than hung off an edge, so the ball stays on the
+   heading's midline whatever the clamp below resolves to.
+
+   The position is CSS's alone. Nothing in <script> writes to this element, so
+   the ball is where it belongs whether or not the script ever runs, and the
+   scrub has one property on one layer to think about.
+
+   Same stops as .scroll-ball, so the phone's ball and the desktop's are
+   recognisably one object rather than two oranges. */
+.hero-orb-ball {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(140px, 44vw, 190px);
+  height: clamp(140px, 44vw, 190px);
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 34% 28%, #ffa877, #ff7c3e 40%, #e8551c 76%, #c6420f);
+  box-shadow: 0 26px 44px -24px rgba(198, 66, 15, 0.6);
+}
+
+/* A soft accent bloom a little under three times the ball's width, which is
+   what stops the sphere reading as a hard disc pasted behind the type and lets
+   it sit in the page as light instead. */
+.hero-orb-ball::before {
+  content: '';
+  position: absolute;
+  inset: -70%;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255, 124, 62, 0.17), rgba(255, 124, 62, 0) 62%);
+}
+
+/* The sphere's shading is fixed — light does not orbit with the ball — so the
+   rotation lives on this layer, and needs marks on it to be legible at all. Two
+   soft poles read as a rolling ball; a bare gradient reads as one sliding.
+   Same idea as .scroll-ball-spin, for the same reason.
+
+   Not the same figures, though, and the difference is the whole of what a mark
+   at this size has to answer for. That ball is 46px and its poles are a hard
+   17% disc, which at that scale is a dot. This one is 172px — nearly four times
+   across — and the identical proportions came out as two 30px craters with a
+   cut edge, which reads as a texture on the ball rather than as the ball
+   turning. Smaller against the sphere and faded rather than cut: enough to
+   carry a turn and a half, not enough to be looked at.
+
+   This layer is the only thing the scrub touches, which is why the will-change
+   is here and not on the ball — see ORB_SPIN. */
+.hero-orb-spin {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 50% 15%, rgba(139, 44, 8, 0.22) 0 7%, rgba(139, 44, 8, 0) 18%),
+    radial-gradient(circle at 50% 85%, rgba(139, 44, 8, 0.22) 0 7%, rgba(139, 44, 8, 0) 18%);
+  will-change: transform;
+}
+
+/* Specular highlight, above the spinning layer and deliberately outside it. */
+.hero-orb-ball::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 33% 25%, rgba(255, 255, 255, 0.5), transparent 45%);
 }
 
 /* No pinned read here, so everything that only exists to serve one is dead
@@ -453,6 +756,14 @@ onUnmounted(() => {
 
   /* Nothing to punctuate once the heading wraps to two lines. */
   .hero-mark {
+    display: none;
+  }
+
+  /* And nothing to fill: with the frame unpinned and sized to its contents
+     there is no half-screen of air under the headline. Left in, it would be
+     positioned 15vh off the foot of a box that is now only as tall as the
+     heading, i.e. on top of it. */
+  .hero-orb {
     display: none;
   }
 }

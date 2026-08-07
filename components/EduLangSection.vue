@@ -93,9 +93,28 @@ useBallPerch(() => langRailRef.value, {
   start: 'top 22%',
   end: 'top -8%',
   to: 0.63,
-  // The fall from here is the length of the footer, so it is long in px
-  // whatever this says; the figure only has to stop the two windows meeting.
-  fall: 0.1
+  // The last hop on the page, and the one with the least room to make it in:
+  // the footer's resting perch is anchored 150px from the end of the document
+  // and cannot be moved, so everything between this rule and that one has to
+  // fit in what the tail happens to have. Left at 0.1 the ball got 220px of
+  // scroll for a 666px drop and arrived at 5.9px per px — by some distance the
+  // fastest thing on the site, and the last thing anyone sees.
+  //
+  // Lengthening it alone did not fix it, and `holdExit` is why: read live, the
+  // arc off this rule spent its first half rising, so the extra scroll bought a
+  // taller lob rather than a gentler descent. With the launch height held the
+  // two work together — a longer fall hands the ball over earlier, which leaves
+  // it lower in the frame, so the drop shrinks as the scroll grows and the
+  // landing slows twice over.
+  //
+  // 0.6 rather than more, and the ceiling is not this section's to raise. This
+  // whole run is already floored at ROLL_MIN_RIDE, so every px the crossing
+  // takes is a px off the legs either side of it — measured, 0.6 costs the hop
+  // onto the Skills rule about a sixth of its pace and leaves the sideways exit
+  // out of Skills alone; going further starts to tell. The only way to have
+  // both is more page between the skills grid and the footer.
+  fall: 0.6,
+  holdExit: true
 })
 
 onMounted(() => {
@@ -123,9 +142,8 @@ onMounted(() => {
         </article>
 
         <article class="reveal edu-card">
-          <svg class="edu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path v-for="d in BUBBLE" :key="d" :d="d" />
-          </svg>
+          
+          <svg class="edu-icon" xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="1.536" stroke-linecap="round" stroke-linejoin="round"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M5 8l6 6"></path> <path d="M4 14l6-6 2-3"></path> <path d="M2 5h12"></path> <path d="M7 2h1"></path> <path d="M22 22l-5-10-5 10"></path> <path d="M14 18h6"></path> </g></svg>
 
 
           <ul class="lang-list">
@@ -136,7 +154,7 @@ onMounted(() => {
               class="lang-row"
             >
               <span class="lang-names">
-                <span :lang="lang.code" class="lang-native">{{ lang.native }}</span>
+                <span :lang="lang.code" class="lang-native md:text-[21x] text-[16px]">{{ lang.native }}</span>
                 <span v-if="lang.native !== lang.name" class="lang-roman">{{ lang.name }}</span>
               </span>
 
@@ -247,7 +265,6 @@ onMounted(() => {
    system face for those two — hence the loose line-height, which is what those
    scripts need for their ascenders and matras rather than a preference. */
 .lang-native {
-  font-size: 21px;
   line-height: 1.4;
   letter-spacing: -0.01em;
 }

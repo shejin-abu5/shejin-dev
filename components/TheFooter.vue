@@ -115,7 +115,7 @@ onMounted(() => {
           <div class="text-xs uppercase tracking-wide text-white/50">
             Status
             <span class="mt-1.5 block font-data text-[13px] normal-case tracking-normal text-paper">
-              Employed, open to relocation
+              Open to relocation
             </span>
           </div>
         </div>
