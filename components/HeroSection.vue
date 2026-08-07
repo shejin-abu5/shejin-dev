@@ -479,16 +479,6 @@ onUnmounted(() => {
       class="hero-frame sticky top-0 flex h-screen flex-col justify-center overflow-hidden pt-[70px] md:pt-0"
     >
       <div class="hero-pad w-full px-5 md:-translate-y-[6vh] md:px-8">
-        <!-- The phone's stand-in for the scroll ball, which does not run below
-             1024px — see BALL_QUERY. Not a copy of the journey, which needs a
-             column of rules to land on that a phone layout does not have, but
-             the same object where that journey starts it: centred on the
-             headline, with the type passing across it as the track slides.
-
-             First in the box, and the only reason it is inside .hero-pad at all
-             — both it and .hero-track are positioned with no z-index, so paint
-             order is DOM order and the heading lands on top of the ball without
-             a stacking context anywhere. -->
         <div class="hero-orb md:hidden" aria-hidden="true">
           <span class="hero-orb-ball"><span class="hero-orb-spin" /></span>
         </div>
@@ -534,11 +524,6 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- The outline button carries `bg-paper` rather than relying on the page
-           behind it: the ball is centred on the heading and reaches ~20px into
-           this row, and an unfilled pill let its arc run straight through the
-           button. On white the fill changes nothing, and this row is md:hidden,
-           so white is the only background it has ever had. -->
       <div class="hero-cta top-[6em] flex flex-wrap items-center gap-2.5 px-5 md:hidden">
         <a
           href="mailto:shejin.abu@gmail.com"

@@ -35,11 +35,6 @@ const links = [
     :class="scrolled ? 'border-hair' : 'border-transparent'"
   >
     <div class="flex items-center justify-between">
-      <!--
-        The mark carries the name, so the image is decorative and the text
-        beside it is what screen readers announce — captioning both would
-        read the name twice.
-      -->
       <a href="#" class="flex items-center gap-2.5" aria-label="Shejin Abu — home">
         <img
           :src="logoUrl"
@@ -49,9 +44,6 @@ const links = [
           height="44"
           class="h-7 w-7 shrink-0 md:h-11 md:w-11 object-contain"
         />
-        <!-- <span class="font-display font-black text-[15px] uppercase tracking-wide">
-          Shejin Abu
-        </span> -->
       </a>
 
       <div class="hidden md:flex gap-9 items-center">

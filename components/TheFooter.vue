@@ -70,7 +70,7 @@ onMounted(() => {
       <h2
         class="footer-fade max-w-[900px] font-display text-[clamp(34px,7vw,96px)] font-black uppercase leading-[0.95] tracking-tight"
       >
-        Open to Senior Frontend / UI roles in the UAE.
+        Open to Frontend / UI roles in the UAE.
       </h2>
 
       <p class="footer-fade mt-6 max-w-[520px] text-[15px] leading-relaxed text-white/60">
