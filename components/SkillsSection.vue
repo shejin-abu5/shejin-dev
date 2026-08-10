@@ -406,11 +406,41 @@ onMounted(() => {
     0 calc(2px + var(--lift) * 20px) calc(12px + var(--lift) * 34px) rgb(18 18 18 / calc(0.055 + var(--lift) * 0.1)),
     0 1px 2px rgb(18 18 18 / 0.04);
   backface-visibility: hidden;
+  /* WebKit only learned the unprefixed property in Safari 15.4; below that an
+     unprefixed-only declaration is dropped and neither face is ever culled. */
+  -webkit-backface-visibility: hidden;
   cursor: pointer;
 }
 
+/*
+  The 1px of Z on each face is load-bearing on WebKit, and the reason it is
+  written on both is that it has to be measured from each face's own side.
+
+  Both faces sit at grid-area 1/1, so before this they were exactly coplanar —
+  the front at Z 0 and the back rotated 180deg about a plane through Z 0. Two
+  surfaces occupying one plane leave the depth sort free to pick either, and
+  `backface-visibility` on .skill-face does not settle it: it culls the face's
+  own backface, but not a descendant WebKit has promoted to a layer of its own,
+  which .skill-row is by virtue of its z-index. On iOS Safari the result was the
+  front's category name painting through the flipped card mirrored, with its
+  chevron alongside — the card read as two faces at once.
+
+  translateZ applies after the rotation in each of these, so each face moves a
+  pixel towards whichever side it is facing. That makes the face a 3D-positioned
+  layer in its own right rather than a flat box in its parent's plane, and the
+  whole subtree beneath it — promoted descendants included — is then culled as
+  one unit when it turns away.
+
+  1px because it only has to break the tie: at the 1200px perspective on
+  .skill-card it is far below a pixel of parallax, so it buys the culling
+  without moving anything on screen.
+*/
+.skill-face--front {
+  transform: translateZ(1px);
+}
+
 .skill-face--back {
-  transform: rotateY(180deg);
+  transform: rotateY(180deg) translateZ(1px);
   justify-content: flex-start;
   gap: 0.75rem;
 }
@@ -464,20 +494,30 @@ onMounted(() => {
      replaces: it is a fraction of the 24-unit viewBox, so the 0.4 in the
      markup scales with the glyph instead of having to be re-set per size. */
   transition: opacity 0.45s ease;
+  /* Behind the card's own content but still in front of its background: a
+     negative index paints beneath in-flow children and above the background of
+     the stacking context it sits in, and .skill-face is one of those now that
+     each face carries a transform. This is what lets .skill-row drop the
+     z-index it used to need — see the note there. */
+  z-index: -1;
 }
 
-/* Kept from when the mark sat in the bottom-left, on top of the category name:
-   an absolutely-positioned element paints over in-flow content regardless of
-   source order, and this lifts the row back above it. Still earning its place
-   with the mark back up top: the glyph is 186px tall against a card that
-   floors at 134px, so on a card sitting anywhere near that floor it reaches
-   the row. It does not collide at the heights the back face forces in
-   practice, but it comes close enough that the stacking should not be left to
-   source order.
+/* The row still has to clear the ghost mark — the glyph is 186px tall against a
+   card that floors at 134px, so near that floor it reaches the row, and the
+   stacking should not be left to source order. What changed is which of the two
+   moves. This row used to carry `z-index: 1` to lift itself above an
+   absolutely-positioned mark; the mark now sits at `z-index: -1` instead and
+   the row stays where it is in flow.
 
-   `z-index` with no `position` is deliberate and not a mistake: the row is a
-   flex item of .skill-face, and z-index applies to those. Adding
-   `position: relative` would do the same job and break something else —
+   Swapped because of what the z-index cost on WebKit. A z-index on a flex item
+   makes it a stacking context, and WebKit promotes that to a layer of its own —
+   one that escapes the backface culling of the .skill-face above it. So on a
+   flipped card the front's category name and chevron went on painting through
+   the back, mirrored, while the rest of the front face was correctly hidden.
+   Every other engine culled the whole subtree together.
+
+   Nothing here needs a stacking context of its own now, so there is none to
+   promote. Note that the row still must not become positioned:
    .skill-toggle::after is absolutely positioned and resolves against
    .skill-face to stretch the button's hit area over the whole card, and a
    positioned row would capture it and shrink that target to the row. */
@@ -486,7 +526,6 @@ onMounted(() => {
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
-  z-index: 1;
 }
 
 /* The rule is what gives the heading a floor to sit on — without it the name
@@ -594,12 +633,4 @@ onMounted(() => {
     transition: none;
   }
 }
-
-@media screen and (max-width: 991px) {
-  .skill-name {
-    perspective: none;
-    -webkit-perspective: none;
-  }
-}
-
 </style>
