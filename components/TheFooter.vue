@@ -87,7 +87,7 @@ onMounted(() => {
         </a>
 
         <a
-          href="/files/Shejin-Abux1.pdf"
+          href="/files/ShejinAbu-26.pdf"
           download="Shejin-Abu-CV.pdf"
           class="inline-flex items-center gap-2 rounded-full bg-paper px-5 py-2.5 font-data text-[13px] text-ink transition-colors hover:bg-accent-text hover:text-white"
         >

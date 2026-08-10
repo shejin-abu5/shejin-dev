@@ -532,7 +532,7 @@ onUnmounted(() => {
           Email me
         </a>
         <a
-          href="/files/Shejin-Abux1.pdf"
+          href="/files/ShejinAbu-26.pdf"
           download="Shejin-Abu-CV.pdf"
           class="inline-flex min-h-[46px] items-center rounded-full border border-hair bg-paper px-5 font-data text-[13px] text-ink transition-colors hover:border-ink"
         >
