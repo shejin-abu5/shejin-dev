@@ -36,8 +36,9 @@ button:focus-visible {
    syntax: `animate-[scroll-left_32s_linear_infinite]`. Tailwind has no
    built-in marquee/scroll animation, so the keyframes must be defined
    somewhere; the animation itself is still applied as a Tailwind utility
-   class, and respects prefers-reduced-motion via `motion-reduce:animate-none`
-   in the component, not a separate override here. */
+   class in the component. It used to carry `motion-reduce:animate-none`
+   alongside it — see BALL_QUERY in composables/useScrollBall.ts for why that
+   and the site's other reduced-motion gating came out. */
 @keyframes scroll-left {
   from {
     transform: translateX(0);
@@ -175,12 +176,7 @@ button:focus-visible {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
-  .swipe-dot > span {
-    transition: none;
-  }
-}
+/* The `prefers-reduced-motion: reduce` block that used to close this file —
+   `scroll-behavior: auto` on html and a killed transition on the swipe dots —
+   is gone along with the rest of the site's reduced-motion gating. See
+   BALL_QUERY in composables/useScrollBall.ts for the reasoning. */

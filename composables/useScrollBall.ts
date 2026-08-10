@@ -5,8 +5,20 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
  * Where the ball exists at all. Sections gate their perch registration on the
  * same query the ball component gates itself on, so the two can never disagree
  * about whether the journey is running.
+ *
+ * Width only. This used to carry `and (prefers-reduced-motion: no-preference)`
+ * alongside it, which read well in the abstract and turned out to be the wrong
+ * trade in practice: macOS ships plenty of machines with "Reduce motion"
+ * already on — the owner of this site included — and on every one of them the
+ * ball, the pinned hero, the float deck and the work deck all vanished at once.
+ * What was left was not a calmer site, it was a plain document that gave no
+ * sign the motion had ever been designed. The decision is deliberate: this
+ * portfolio's motion *is* its content, so it runs for everyone.
+ *
+ * Reverting is one grep: `prefers-reduced-motion` across components/,
+ * composables/ and assets/css/ finds every site that took part in this change.
  */
-export const BALL_QUERY = '(min-width: 1024px) and (prefers-reduced-motion: no-preference)'
+export const BALL_QUERY = '(min-width: 1024px)'
 
 export interface Perch {
   /**

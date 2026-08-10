@@ -1117,8 +1117,9 @@ onBeforeUnmount(() => {
 }
 
 /* Belt and braces with the BALL_QUERY gate in <script>: if the journey is not
-   running, the element is not there to be found. */
-@media (max-width: 1023px), (prefers-reduced-motion: reduce) {
+   running, the element is not there to be found. Kept in step with that query,
+   which is width-only now — the reduced-motion arm is gone from both. */
+@media (max-width: 1023px) {
   .scroll-ball {
     display: none;
   }

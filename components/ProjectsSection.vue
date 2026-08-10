@@ -655,27 +655,10 @@ section {
   }
 }
 
-/* Bounded below at lg so it cannot re-add the stacked list's bottom margin to
-   a rail card on a phone whose owner has asked for reduced motion. Under that
-   width the max-width rules above have already unwound the deck anyway, so
-   there is nothing here for this to do. */
-@media (prefers-reduced-motion: reduce) and (min-width: 1024px) {
-  .work-card {
-    position: static;
-    margin-bottom: 2.5rem;
-  }
-
-  .work-fade {
-    display: none;
-  }
-}
-
-/* The peek's fade is depth, not motion, so it stays — what goes is the ramp
-   between the two states, which is a thing animating on screen. Unbounded,
-   unlike the block above: this only has anything to act on below lg. */
-@media (prefers-reduced-motion: reduce) {
-  .work-card--peek {
-    transition: none;
-  }
-}
+/* Two `prefers-reduced-motion: reduce` blocks used to sit here: one unwinding
+   the deck back to a stacked list above lg, one killing the peek card's fade
+   ramp below it. Both are gone with the gate — see BALL_QUERY in
+   composables/useScrollBall.ts. The deck is driven by BALL_QUERY, which is now
+   width-only, so unwinding it on a preference would strand the cards the
+   timeline is still placing. */
 </style>

@@ -226,7 +226,7 @@ onMounted(() => {
   // deliberately the same line as BALL_QUERY: the perches registered below are
   // only useful while the page's ball is running, and the chart is only worth
   // pinning while it has a ball to ride it.
-  mm.add('(min-width: 1024px) and (prefers-reduced-motion: no-preference)', () => {
+  mm.add('(min-width: 1024px)', () => {
     const chart = chartRef.value
     const rows = Array.from(chart?.querySelectorAll<HTMLElement>('.gantt-row') ?? [])
     const tickEls = Array.from(stageRef.value?.querySelectorAll<HTMLElement>('.gantt-tick') ?? [])
@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
 
 /* The chart. Must match the gsap.matchMedia query in <script> exactly, and
    must stay mutually exclusive with the static query below. */
-@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+@media (min-width: 1024px) {
   .gantt-section {
     padding: 0;
   }
@@ -766,9 +766,10 @@ onBeforeUnmount(() => {
 
 }
 
-/* Static path: plain vertical list. Also the reduced-motion answer at any
-   width, which is why these unwind rather than only applying below lg. */
-@media (max-width: 1023px), (prefers-reduced-motion: reduce) {
+/* Static path: plain vertical list, below lg. It used to answer for
+   reduced-motion at any width too; that half is gone with the gate — see
+   BALL_QUERY in composables/useScrollBall.ts. */
+@media (max-width: 1023px) {
   .gantt-ruler {
     display: none;
   }

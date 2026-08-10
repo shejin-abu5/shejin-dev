@@ -136,14 +136,11 @@ function toggle(i: number) {
 
   const to = flipped.value[i] ? 180 : 0
 
-  // Checked per click rather than once on mount, so flipping the OS setting
-  // mid-session takes effect without a reload.
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    gsap.set(el, { rotationY: to, z: 0 })
-    el.style.removeProperty('--lift')
-    return
-  }
-
+  // The flip runs for everyone. There used to be a snap-to-angle branch here
+  // for `prefers-reduced-motion: reduce`; it went with the rest of that gating
+  // — see BALL_QUERY in composables/useScrollBall.ts. A card the visitor turned
+  // over themselves is also about the least objectionable motion on the page:
+  // it is short, local, and it only ever happens on their own click.
   gsap
     .timeline({ defaults: { overwrite: 'auto' } })
     .to(el, { rotationY: to, duration: 0.7, ease: 'power3.inOut' }, 0)
@@ -627,10 +624,4 @@ onMounted(() => {
   color: theme('colors.ink');
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .skill-toggle,
-  .skill-ghost {
-    transition: none;
-  }
-}
 </style>

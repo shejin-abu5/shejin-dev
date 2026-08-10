@@ -96,12 +96,9 @@ export function useSwipeRail(
     // depend on how the browser resolves offsetLeft for a scroll container.
     const left = slides[i].offsetLeft - slides[0].offsetLeft
 
-    rail.scrollTo({
-      left,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth'
-    })
+    // Always smooth — see BALL_QUERY in composables/useScrollBall.ts for why
+    // the reduced-motion branch that used to pick 'auto' here is gone.
+    rail.scrollTo({ left, behavior: 'smooth' })
   }
 
   function onQueryChange(event: MediaQueryList | MediaQueryListEvent) {

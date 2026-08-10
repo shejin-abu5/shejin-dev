@@ -233,19 +233,19 @@ onMounted(() => {
   }
 
   // Everything below is the pinned horizontal read, and it only exists on
-  // desktop for visitors who haven't asked for reduced motion. matchMedia
-  // reverts the whole block — tweens, ScrollTriggers and inline styles —
-  // the moment the query stops matching, so a resize past the breakpoint
-  // leaves the static layout genuinely untouched.
+  // desktop. matchMedia reverts the whole block — tweens, ScrollTriggers and
+  // inline styles — the moment the query stops matching, so a resize past the
+  // breakpoint leaves the static layout genuinely untouched.
+  //
+  // The reduced-motion half of these queries is gone on purpose; the reasoning
+  // lives on BALL_QUERY in composables/useScrollBall.ts.
   mm = gsap.matchMedia()
 
-  // The slogan types itself out when it scrolls up into view. Not gated on
-  // `md` like the block below it — this one is a line of text rather than a
-  // pinned read, and it works the same at any width — but still inside a
-  // reduced-motion query, because a caret marching across the line is exactly
-  // the kind of thing that query exists to switch off. Without it the CSS
-  // leaves the slogan fully typed and the caret hidden.
-  mm.add('(prefers-reduced-motion: no-preference)', () => {
+  // The slogan types itself out when it scrolls up into view. `all` rather than
+  // a width — this one is a line of text rather than a pinned read, and it
+  // works the same at any width — but still an `mm.add`, because that is what
+  // reverts the tween and the two caret classes on unmount.
+  mm.add('all', () => {
     const slogan = sloganRef.value
     const ink = slogan?.querySelector<HTMLElement>('.hero-slogan-ink')
     const caret = slogan?.querySelector<HTMLElement>('.hero-slogan-caret')
@@ -289,7 +289,7 @@ onMounted(() => {
     return () => caret.classList.remove('is-live', 'is-resting')
   })
 
-  mm.add('(min-width: 768px) and (prefers-reduced-motion: no-preference)', () => {
+  mm.add('(min-width: 768px)', () => {
     // The intro's scroll wipe. The dimmed state is written here rather than in
     // CSS for the same reason the heading's clip is: if this never runs — no
     // JS, or reduced motion — the paragraph stays plainly readable instead of
@@ -360,7 +360,7 @@ onMounted(() => {
   // the scrub is mapped over: 100vh of pinned scroll on desktop, ~66vh on the
   // phone. Raising the spacer does not slow the slide down so much as stretch
   // the same travel over more wheel, which is what reads as dead scroll.
-  mm.add('(prefers-reduced-motion: no-preference)', () => {
+  mm.add('all', () => {
     const wrap = wrapRef.value
     const track = trackRef.value
     // The padded element, not the frame: the gutter moved onto this when the
@@ -438,7 +438,7 @@ onMounted(() => {
   // two are smoothed identically and the ball stops turning on the same frame
   // the heading runs out of travel. Below `md` only: the real scroll ball takes
   // the job over from 1024px up, and between the two there is no gap to fill.
-  mm.add('(max-width: 767px) and (prefers-reduced-motion: no-preference)', () => {
+  mm.add('(max-width: 767px)', () => {
     const wrap = wrapRef.value
     const frame = wrap?.querySelector<HTMLElement>('.hero-frame')
     const spin = wrap?.querySelector<HTMLElement>('.hero-orb-spin')
@@ -489,12 +489,8 @@ onUnmounted(() => {
             v-for="layer in ['ghost', 'ink']"
             :key="layer"
             :aria-hidden="layer === 'ghost' ? 'true' : undefined"
-            class="hero-layer col-start-1 row-start-1 flex flex-nowrap items-center gap-x-[6vw] font-display font-black uppercase leading-[0.92] tracking-tight text-[clamp(52px,16vw,110px)] motion-reduce:flex-wrap motion-reduce:gap-x-[0.25em] md:gap-x-[4vw] md:text-[clamp(80px,12vw,210px)]"
-            :class="
-              layer === 'ghost'
-                ? 'flex text-hair motion-reduce:!hidden'
-                : 'hero-ink text-ink'
-            "
+            class="hero-layer col-start-1 row-start-1 flex flex-nowrap items-center gap-x-[6vw] font-display font-black uppercase leading-[0.92] tracking-tight text-[clamp(52px,16vw,110px)] md:gap-x-[4vw] md:text-[clamp(80px,12vw,210px)]"
+            :class="layer === 'ghost' ? 'flex text-hair' : 'hero-ink text-ink'"
           >
             <span class="block overflow-hidden">
               <span class="hero-line block">Frontend</span>
@@ -709,49 +705,12 @@ onUnmounted(() => {
   background: radial-gradient(circle at 33% 25%, rgba(255, 255, 255, 0.5), transparent 45%);
 }
 
-/* No pinned read here, so everything that only exists to serve one is dead
-   weight: the spacer is a screen and a half of empty scrolling, and the track
-   is a nowrap heading clipped to whatever fits — which is "Frontend" and
-   nothing else. Unwinding it back to an ordinary block is the whole fallback.
-
-   This was already the case above `md` and had no answer: the spacer height
-   and the sticky frame were plain CSS while the timeline that used them was
-   behind a `no-preference` query, so a desktop visitor with reduced motion on
-   got three viewports of a stuck, half-clipped headline. It only became
-   visible once the phone started running the same markup. */
-@media (prefers-reduced-motion: reduce) {
-  .hero-scroll {
-    height: auto;
-  }
-
-  .hero-frame {
-    position: static;
-    height: auto;
-    padding-top: 130px;
-    padding-bottom: 2.5rem;
-  }
-
-  .hero-pad {
-    transform: none;
-  }
-
-  .hero-track {
-    width: 100%;
-  }
-
-  /* Nothing to punctuate once the heading wraps to two lines. */
-  .hero-mark {
-    display: none;
-  }
-
-  /* And nothing to fill: with the frame unpinned and sized to its contents
-     there is no half-screen of air under the headline. Left in, it would be
-     positioned 15vh off the foot of a box that is now only as tall as the
-     heading, i.e. on top of it. */
-  .hero-orb {
-    display: none;
-  }
-}
+/* The static fallback that used to live here — unwinding .hero-scroll's spacer
+   and un-pinning .hero-frame under `prefers-reduced-motion: reduce` — is gone
+   with the query that summoned it. Both the desktop and phone timelines now run
+   unconditionally (see the `mm.add` calls in <script>), so there is no width or
+   preference at which the pinned read is absent and the spacer would be left
+   standing on its own. See BALL_QUERY in composables/useScrollBall.ts. */
 
 /* Asymmetric, because what sits above and below is not symmetric. The pinned
    frame already ends on a screen's worth of air — the heading is lifted 6vh
