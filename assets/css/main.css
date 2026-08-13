@@ -13,6 +13,22 @@ html {
   scroll-behavior: smooth;
 }
 
+:root {
+  /* How wide the footballer is wherever he appears in a section — Selected
+     Work, Experience, Skills, Education, the footer.
+
+     One number for all five, and here rather than per component, because the
+     thing that has to be true is that he is the *same person* each time. Five
+     separate widths meant five slightly different players: 122 in the footer
+     against 148 in Skills is a fifth again, which is plainly a different figure
+     rather than the same one further away.
+
+     The hero is deliberately not on this token. He is a different shot — near,
+     and most of a screen tall — and tying the two together would mean the
+     sections could only ever be resized by shrinking the hero. */
+  --cameo: 152px;
+}
+
 body {
   @apply bg-paper text-ink font-body antialiased;
 }

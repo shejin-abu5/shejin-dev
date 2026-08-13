@@ -1,6 +1,17 @@
 <script setup lang="ts">
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReveal } from '~/composables/useReveal'
-import { useBallPerch } from '~/composables/useScrollBall'
+import { BALL_QUERY, useBallPerch } from '~/composables/useScrollBall'
+
+/**
+ * How much scroll the pin absorbs.
+ *
+ * This used to be shared with the footballer's header, which was scrubbed over
+ * the identical range. He is gone from this section, and the number stays
+ * exactly where he left it — see the pin itself for why it outlived him.
+ */
+const PIN_SCROLL = 620
 
 const sectionRef = ref<HTMLElement | null>(null)
 const eduRailRef = ref<HTMLElement | null>(null)
@@ -117,14 +128,65 @@ useBallPerch(() => langRailRef.value, {
   holdExit: true
 })
 
+let mm: ReturnType<typeof gsap.matchMedia> | null = null
+
 onMounted(() => {
   useReveal(sectionRef.value)
+
+  mm = gsap.matchMedia()
+
+  /**
+   * Holds the section still for the ball's last roll.
+   *
+   * This pin was put here for the footballer's header, and that is the only
+   * reason it was ever documented as having. It outlives him because it was
+   * quietly doing a second job the whole time, and that job is now its only
+   * one: it is what the ball's final roll is spent inside.
+   *
+   * The Languages perch below runs `top 22%` → `top -8%`, and the pin sits in
+   * the middle of that window. Held, the section's top freezes at 0 and the
+   * language row parks 325px down the frame — so the ball crosses it with the
+   * row stationary and comfortably in view, over 620px of scroll it would not
+   * otherwise have. Unpinned, the same window is 30% of a viewport, about
+   * 324px at 1080, and the row is leaving the top of the frame for most of it.
+   * That is the exact failure the perch's own note warns about: "the ball
+   * spends its final roll riding a row that has already scrolled out the top,
+   * which is not a roll anyone sees."
+   *
+   * So the hold is no longer covering a move — it *is* the move. Removing it
+   * along with the player would compress the last roll on the page, and the
+   * drop into the footer with it, to roughly a third of the scroll they were
+   * tuned against.
+   *
+   * Gated on BALL_QUERY because there is no ball below it, so there would be
+   * nothing to hold the page for.
+   */
+  mm.add(BALL_QUERY, () => {
+    const el = sectionRef.value
+    if (!el) return
+
+    const st = ScrollTrigger.create({
+      trigger: el,
+      start: 'top top',
+      end: `+=${PIN_SCROLL}`,
+      pin: true,
+      pinSpacing: true,
+      anticipatePin: 1,
+      invalidateOnRefresh: true
+    })
+
+    return () => st.kill()
+  })
+})
+
+onBeforeUnmount(() => {
+  mm?.revert()
 })
 </script>
 
 <template>
-  <section ref="sectionRef" class="py-12 md:py-[120px]">
-    <div class="mx-auto max-w-[960px] px-5 md:px-8">
+  <section ref="sectionRef" class="relative py-12 md:py-[120px]">
+    <div class="relative mx-auto max-w-[960px] px-5 md:px-8">
       <h2 class="sr-only">Education and Languages</h2>
 
       <div class="edu-grid">
@@ -158,7 +220,7 @@ onMounted(() => {
                 <span v-if="lang.native !== lang.name" class="lang-roman">{{ lang.name }}</span>
               </span>
 
-              <span class="lang-level">{{ lang.level }}</span>
+              <!-- <span class="lang-level">{{ lang.level }}</span> -->
             </li>
           </ul>
         </article>

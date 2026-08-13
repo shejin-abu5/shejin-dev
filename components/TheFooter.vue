@@ -73,8 +73,8 @@ onMounted(() => {
         Open to Frontend / UI roles in the UAE.
       </h2>
 
-      <p class="footer-fade mt-6 max-w-[520px] text-[15px] leading-relaxed text-white/60">
-        If this looks like a fit for a role you're hiring for, feel free to reach out.
+      <p class="footer-fade mt-6 max-w-[520px] text-[18px] leading-relaxed text-white/60">
+        hire me to juggle ⚽
       </p>
 
       <div class="footer-fade mt-9 flex flex-wrap items-center gap-x-8 gap-y-4">
@@ -97,8 +97,33 @@ onMounted(() => {
 
       <div
         ref="restRef"
-        class="mt-24 flex flex-wrap items-end justify-between gap-6 border-t border-white/15 pt-8"
+        class="relative mt-24 flex flex-wrap items-end justify-between gap-6 border-t border-white/15 pt-8"
       >
+        <!-- The last frame of the journey. The ball comes to rest bouncing at
+             the midpoint of this rule, so he stands to the right of it with his
+             hands on his hips — the game is over, which is what the bottom of a
+             page is.
+
+             Absolutely placed inside the rule's own row, so `bottom-full` is
+             its top border and his feet land on exactly the line the ball is
+             bouncing on. Out of flow, so the flex row below is untouched.
+
+             An earlier and shallower window than the other cameos get, because
+             this one is inside the last screen of the document and the default
+             asks for scroll that does not exist: at maximum scroll he is still
+             65% down the viewport, so a window ending at `top 42%` can never
+             finish and he would be caught permanently half way out of a stand.
+
+             The `lie` pose built from the reference photo is still in the pose
+             table, unused, if this should ever change its mind. -->
+        <!-- The one cameo that is not `--cameo` wide, and it is a deliberate
+             exception rather than a drift. Every other player stands on white
+             at 152px; this one stands on near-black, where a flat figure loses
+             its edges to the background and reads smaller than it measures.
+             205px puts it back. -->
+        <div class="player-glow pointer-events-none absolute bottom-full right-[7%] hidden w-[205px] lg:block">
+          <ThePlayer move="footer" flip tone="dark" start="top 120%" end="top 56%" />
+        </div>
         <div class="flex flex-wrap gap-10">
           <div class="text-xs uppercase tracking-wide text-white/50">
             Location
@@ -149,3 +174,32 @@ onMounted(() => {
     </div>
   </footer>
 </template>
+
+<style scoped>
+/* A soft lift behind the player, and the only place on the page that needs one.
+
+   Everywhere else he stands on paper and his own edges do the separating. Here
+   the ground is #121212 and the figure's darkest parts — hair, the back leg's
+   shading, the shadow under his boots — are close enough to it that the
+   silhouette breaks up: he reads as a few bright shapes rather than one person.
+
+   Warm rather than neutral, and the same accent the ball is, so it reads as
+   light coming off the pitch rather than as a vignette pasted behind him. */
+/* `isolation` is load-bearing, not tidiness. The glow is a `z-index: -1`
+   pseudo-element, and without a stacking context of its own here that -1 is
+   resolved against the footer — which paints its own near-black background in
+   the same context, directly over the top of it. The glow was there the whole
+   time and behind the wall. */
+.player-glow {
+  isolation: isolate;
+}
+
+.player-glow::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -16% -34% -10%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 124, 62, 0.26), rgba(255, 124, 62, 0) 70%);
+}
+</style>

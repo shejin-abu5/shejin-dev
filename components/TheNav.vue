@@ -20,12 +20,21 @@ onUnmounted(() => {
   window.removeEventListener('scroll', onScroll)
 })
 
+/**
+ * The id each link points at, rather than a written-out href, so the anchor
+ * and the scroll spy cannot drift apart — they are the same string. Both used
+ * to be spelled out separately and both were wrong: Work pointed at
+ * #experience, and Career pointed at #career, which is an id no section on
+ * this page has ever carried.
+ */
 const links = [
-  { label: 'Work', href: '#work' },
-  { label: 'Experience', href: '#experience' },
-  { label: 'Skills', href: '#skills' },
-  { label: 'Contact', href: '#contact' }
+  { label: 'Work', id: 'work' },
+  { label: 'Career', id: 'experience' },
+  { label: 'Skills', id: 'skills' },
+  { label: 'Sign Me', id: 'contact' }
 ]
+
+const { active } = useScrollSpy(links.map((link) => link.id))
 </script>
 
 <template>
@@ -49,9 +58,16 @@ const links = [
       <div class="hidden md:flex gap-9 items-center">
         <a
           v-for="link in links"
-          :key="link.href"
-          :href="link.href"
-          class="text-[13px] font-medium uppercase tracking-wider text-steel hover:text-ink transition-colors"
+          :key="link.id"
+          :href="`#${link.id}`"
+          :data-label="link.label"
+          :aria-current="active === link.id ? 'true' : undefined"
+          class="nav-link text-[13px] uppercase tracking-wider transition-colors"
+          :class="
+            active === link.id
+              ? 'font-semibold text-ink'
+              : 'font-medium text-steel hover:text-ink'
+          "
         >
           {{ link.label }}
         </a>
@@ -99,9 +115,15 @@ const links = [
     >
       <a
         v-for="link in links"
-        :key="link.href"
-        :href="link.href"
-        class="rounded-md px-2 py-2.5 text-sm font-medium uppercase tracking-wider text-steel hover:bg-paper-soft hover:text-ink"
+        :key="link.id"
+        :href="`#${link.id}`"
+        :aria-current="active === link.id ? 'true' : undefined"
+        class="rounded-md px-2 py-2.5 text-sm uppercase tracking-wider transition-colors"
+        :class="
+          active === link.id
+            ? 'font-semibold text-ink'
+            : 'font-medium text-steel hover:bg-paper-soft hover:text-ink'
+        "
         @click="closeMenu"
       >
         {{ link.label }}
@@ -109,3 +131,36 @@ const links = [
     </div>
   </nav>
 </template>
+
+<style scoped>
+/*
+ * The active link thickens from 500 to 600, and a bolder label is a wider
+ * label. In a flex row of four that width has to come from somewhere: every
+ * handover would shove the remaining links sideways by a pixel or two, so the
+ * whole row would twitch its way down the page as you scrolled. Small, but it
+ * is the kind of movement you see without being able to say what moved.
+ *
+ * So each link permanently occupies the width of its own bold label, whichever
+ * weight it is currently drawn at — a copy of the label at 600 that has no
+ * height, cannot be seen, and is skipped by screen readers because it is
+ * `visibility: hidden`. The visible text is centred in that reserved space.
+ * Nothing on the row ever changes width, and the only thing that moves between
+ * one section and the next is the ink.
+ *
+ * Not needed on the mobile menu: it is a stacked column of full-width rows,
+ * with nothing beside a link to push.
+ */
+.nav-link {
+  text-align: center;
+}
+
+.nav-link::after {
+  content: attr(data-label);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 600;
+  pointer-events: none;
+}
+</style>

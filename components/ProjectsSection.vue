@@ -112,6 +112,82 @@ const cards = projects.map((project) => {
 
 const sectionRef = ref<HTMLElement | null>(null)
 const railRef = ref<HTMLElement | null>(null)
+
+/**
+ * The heading and the rule — held still while he strikes, then released into
+ * the deck.
+ *
+ * Holding anything costs scroll, and that scroll has to be spent on *something*
+ * visible. There are only two candidates and both were built wrong first:
+ *
+ *   pinSpacing: true   spends it on nothing. The spacer reserves the hold's
+ *                      whole duration as padding below the block, which is an
+ *                      empty band between the rule and the first card — and it
+ *                      sits there long before the pin is anywhere near.
+ *   pinSpacing: false  spends it on the deck, which is right, but only if the
+ *                      deck has somewhere to come *from*. Adjacent, it rode
+ *                      straight up past the held block and the first card
+ *                      rendered above and below the heading at once.
+ *
+ * The fix is the second one plus a runway: the rule carries an extra
+ * HOLD_SCROLL of bottom margin at `lg`, so the deck begins the hold exactly
+ * that far low and arrives at its normal spacing on the frame the pin releases.
+ * The scroll is spent on the cards coming to meet the heading, which is the
+ * thing the section wanted to say anyway.
+ *
+ * Not the section, either. A pin sets its element `position: fixed`, and
+ * `position: sticky` needs a scrolling ancestor — pinning the whole section
+ * dropped every deck card back to flow for the hold and snapped them back the
+ * frame it ended. Measured: 289px.
+ */
+const headBlockRef = ref<HTMLElement | null>(null)
+
+/**
+ * The window the whole contact plays over: the roll down the rule, the wind-up,
+ * the strike, the follow-through.
+ *
+ * The rule's perch and the player's own scrub are both given this identical
+ * range — two windows describing one moment is the bug this keeps walking into.
+ *
+ * Short, because it is borrowed: the heading is held still for exactly this
+ * much scroll and the reader gets nothing else in return but the kick. It is
+ * also the deck's runway — the rule's bottom margin at `lg` is the normal 112
+ * plus this — so the two are one number and must stay one number. Raise it and
+ * the deck starts lower to match; they cannot be tuned apart.
+ */
+const HOLD_SCROLL = 420
+/**
+ * Where the block comes to rest.
+ *
+ * 260 rather than flush, and the nav is what sets it: at `top+=120` the rule
+ * settled around y=245, putting the player's box top at 30 under an 88px nav —
+ * he played the whole strike with his head cut off. The ball's own top fade
+ * band (190px) is satisfied either way, so the nav is the binding constraint.
+ */
+const HOLD_START = 'top top+=260'
+
+/**
+ * How far through the contact's window we are, 0–1.
+ *
+ * Handed to the rule's perch, which does two things. It gives the ball this
+ * block's own clock, so where it sits along the rule is read off the same
+ * number the block is being held by. And it marks the perch *anchored*, which
+ * is the part that matters here: a free perch's window is the ball's to move,
+ * and layout() duly moved this one — measured, the roll and the strike that
+ * ends it both played 290px before the hold they were declared inside, so he
+ * kicked the ball and only then did the section stop to let you watch.
+ */
+const holdProgress = ref(0)
+
+/**
+ * How far into the hold the ball reaches his boot.
+ *
+ * The perch reads `to` at progress 1, so handed the window's progress raw the
+ * ball arrived exactly as it closed — he struck it on the last frame and the
+ * entire follow-through fell outside. Finishing the roll at 72% leaves the last
+ * quarter of the window for the strike, which is the part worth the room.
+ */
+const CONTACT_AT = 0.72
 const stackEnded = ref(false)
 
 // Below lg the deck is a swipe rail — see composables/useSwipeRail.ts and
@@ -119,7 +195,23 @@ const stackEnded = ref(false)
 // presentations: a plain block that holds the sticky cards above lg, the
 // scroll container below it.
 const deckRef = ref<HTMLElement | null>(null)
-const { active, isRail, goTo } = useSwipeRail(() => deckRef.value, '.work-card')
+
+/**
+ * Where this deck becomes a swipe rail — lower than the shared RAIL_QUERY.
+ *
+ * Selected Work stacks as a deck down to 992px, which is below the line the
+ * other rails switch at, so between 992 and 1023 it is a deck while Skills and
+ * Experience are already rails. One shared constant cannot say that, hence the
+ * override. Kept in step with the `deck` screen in tailwind.config.ts and the
+ * `max-width: 991px` blocks in <style> below.
+ */
+const DECK_RAIL_QUERY = '(max-width: 991px)'
+
+const { active, isRail, goTo } = useSwipeRail(
+  () => deckRef.value,
+  '.work-card',
+  DECK_RAIL_QUERY
+)
 
 // Where along the deck's width the walk starts and finishes. The heading rule
 // is its first step and the six cards are the rest, so the ball crosses the
@@ -135,7 +227,23 @@ const { active, isRail, goTo } = useSwipeRail(() => deckRef.value, '.work-card')
 // chart finally takes over — measured as a 120px jump appearing at full
 // opacity from nothing. Finishing on the right means the handoff can go off
 // the edge of the frame instead, which is what `side` is for.
-const DECK_FROM = 0.14
+// Where the ball leaves the rule and joins the deck — and therefore where the
+// player has to be standing, because this is the point he strikes it at.
+//
+// 0.14 for a long time, which put the handover a seventh of the way along the
+// rule. That is directly beneath the section heading, and a figure big enough
+// to read as one cannot stand there: standing on the rule he is nearly two
+// hundred pixels tall and the heading's foot is forty above it.
+//
+// 0.48 rather than the 0.42 tried first, and the six points are measured, not
+// hedged: SELECTED WORK sets to about 420px at the size it clamps to, which
+// ends a shade past 0.42 of the rule — he stood on the K. This clears the
+// longest the heading gets and the rule still has a good run into him.
+//
+// The deck's walk pays for it: the ball crosses the cards from here rather than
+// from 0.14, a little over half of what it used to. Worth it — the roll it
+// gives up is the invisible part, and what it buys is the contact.
+const DECK_FROM = 0.56
 const DECK_TO = 0.88
 
 // The ball rides down the deck: the rule under the section heading first, then
@@ -152,7 +260,10 @@ const DECK_TO = 0.88
 // The rule is the first step of that walk and the cards are the rest — see
 // DECK_FROM — so the whole section reads as one crossing rather than seven.
 useBallPerch(() => railRef.value, {
-  trigger: () => railRef.value,
+  // The pinned block, over exactly the pin's range. Struck against the rule
+  // itself the markers stop moving the moment it is held, so the whole roll —
+  // and the strike that ends it — was over before the hold began.
+  trigger: () => headBlockRef.value,
   // In frame, not below it. At 106% the ball landed on a rule that was still
   // a screen's-worth under the fold, so it spent the fall diving to meet it —
   // measured at 3.3px of descent per px of scroll, down to within 70px of the
@@ -161,7 +272,7 @@ useBallPerch(() => railRef.value, {
   // was the one place on the page where the vertical read faster than the
   // horizontal. Landing on a rule that is already in frame makes the fall a
   // fall.
-  start: 'top 88%',
+  start: HOLD_START,
   // A quarter of the frame, not the 86% of it this used to claim.
   //
   // The window a section declares is not free. layout() spends the scroll in a
@@ -178,18 +289,81 @@ useBallPerch(() => railRef.value, {
   //
   // Short enough that the roll runs near ROLL_SPEED and the slack goes back to
   // the fall, which is the leg that has somewhere to be.
-  end: 'top 62%',
-  // One step's worth, handing straight on to the first card. How long that
-  // takes is no longer this section's business — the ball paces its own
-  // journey now, and will give the roll the scroll it needs or shorten the
-  // roll if the page has none to give. See layout() in TheScrollBall.vue.
-  to: DECK_FROM
+  end: `+=${HOLD_SCROLL}`,
+  // The ball lands part-way along the rule rather than at its left-hand end,
+  // and that is about *when* the handover happens rather than where.
+  //
+  // The ball paces itself: layout() gives a roll however much scroll it needs
+  // to run at ROLL_SPEED, so the length of the roll sets how far down the page
+  // it finishes. Rolling the full width to a handover at 0.48 costs ~765px of
+  // scroll against the ~234px this trigger declares, and layout duly stretched
+  // the window — which pushed the contact until the rule had scrolled to the
+  // top of the frame. Measured: the striking boot was at y=-73, off the top of
+  // the screen, and the ball was down to a tenth of its opacity in the fade
+  // band by the time it got kicked.
+  //
+  // Landing at 0.28 leaves a fifth of the rule to roll, which finishes with the
+  // rule around the middle of the frame — where somebody can see it. It costs
+  // nothing: the ball arrives here out of the air from the hero, and where it
+  // touches down is a free choice.
+  from: 0.28,
+  to: DECK_FROM,
+  // The hold's own clock — see `holdProgress`. Also what stops layout() moving
+  // this window out from under the pin. Compressed into the first CONTACT_AT of
+  // it so the strike lands with the hold still running.
+  progress: () => Math.min(1, holdProgress.value / CONTACT_AT)
 })
 
 let stackEndObserver: IntersectionObserver | null = null
 let deckMedia: ReturnType<typeof gsap.matchMedia> | null = null
 
+let holdMedia: ReturnType<typeof gsap.matchMedia> | null = null
+
 onMounted(() => {
+  holdMedia = gsap.matchMedia()
+
+  /**
+   * Holds the heading and the rule still while he strikes the ball.
+   *
+   * Without it the whole contact happened on a block travelling past at the
+   * page's own speed — measured, 900px of scroll, which is under a third of a
+   * second at any real scrolling pace, on a moving target.
+   *
+   * What is pinned and how is the whole of this — see `headBlockRef`, which
+   * carries the two ways it was got wrong first.
+   *
+   * Gated on BALL_QUERY: below it there is no ball, no player, and nothing to
+   * hold the page for. Also the width at which the deck stops being a deck, so
+   * pinning there would only be taking scroll from a phone.
+   */
+  holdMedia.add(BALL_QUERY, () => {
+    const el = headBlockRef.value
+    if (!el) return
+
+    // Pinned without spacing, and the deck's runway is what makes that work —
+    // see the rule's wrapper in the template. It also publishes a progress
+    // value: the ball's perch and the player's scrub both read it, so the roll,
+    // the wind-up and the strike are three views of one number and cannot
+    // drift.
+    const st = ScrollTrigger.create({
+      trigger: el,
+      start: HOLD_START,
+      end: `+=${HOLD_SCROLL}`,
+      pin: true,
+      pinSpacing: false,
+      anticipatePin: 1,
+      invalidateOnRefresh: true,
+      onUpdate: (self) => {
+        holdProgress.value = self.progress
+      }
+    })
+
+    return () => {
+      st.kill()
+      holdProgress.value = 0
+    }
+  })
+
   // Cards rise into view through the blur band, which owns the bottom ~22vh.
   // At the default 88% line the fly-in plays out entirely behind that blur and
   // the card surfaces already-arrived. Triggering above the band spends the
@@ -291,13 +465,14 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stackEndObserver?.disconnect()
+  holdMedia?.revert()
   deckMedia?.revert()
 })
 </script>
 
 <template>
   <section id="work" ref="sectionRef" class="relative py-12 md:py-[160px]">
-    <div class="mx-auto max-w-[1320px] px-6 md:px-12">
+    <div ref="headBlockRef" class="relative z-10 mx-auto max-w-[1320px] bg-paper px-6 md:px-12">
       <div class="reveal mb-9 flex flex-wrap items-end justify-between gap-6 md:mb-11">
         <div>
           <span class="mb-3.5 block font-data text-[13px] tracking-wide text-accent-text">
@@ -309,13 +484,65 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <span ref="railRef" class="mb-20 md:block hidden h-px w-full bg-hair md:mb-28" aria-hidden="true" />
+      <!-- The rail, and the player standing on it.
+
+           He is inside a relative wrapper rather than positioned against the
+           section, so his feet are on the same line the ball rolls along
+           whatever the heading above it wraps to — the margin moved up here
+           with him for the same reason.
+
+           Facing right, unflipped, and standing at DECK_FROM. Both follow from
+           the same fact: the ball enters this rule at the left, rolls right to
+           DECK_FROM, and leaves there for the deck below. So that is where the
+           contact is, and forward is the way the ball is already going. He used
+           to stand at the far right facing left, which put him most of a rule
+           away from the only point on it the ball ever reaches.
+
+           `left` is short of DECK_FROM by roughly the distance from his own
+           left edge to his boot, so it is the *foot* that lands on the handover
+           and not his hip. -->
+      <div class="relative mb-20 md:mb-28">
+        <span ref="railRef" class="hidden h-px w-full bg-hair md:block" aria-hidden="true" />
+
+        <div class="pointer-events-none absolute -bottom-1.5 left-[47%] hidden w-[var(--cameo)] lg:block">
+          <!-- Scrubbed over the hold, on the same range the ball's own perch is
+               anchored to — so his boot and the ball are two readings of one
+               number rather than two things trying to meet. -->
+          <ThePlayer
+            move="work"
+            :anchor="() => headBlockRef"
+            :start="HOLD_START"
+            :end="`+=${HOLD_SCROLL}`"
+          />
+        </div>
+      </div>
     </div>
 
-    <div class="mx-auto max-w-[1320px] px-6 md:px-12 md:pt-0 pt-3">
+    <!-- The deck's runway, and it has to live out here rather than on the rule.
+
+         `lg:mt-[420px]` is exactly HOLD_SCROLL. The heading above is pinned
+         without spacing for that distance, so the deck keeps moving while the
+         heading does not — starting a hold's-worth lower is what makes it
+         *arrive* at its normal spacing on the frame the pin releases, rather
+         than riding straight up past the heading and rendering above it.
+
+         It was tried as bottom margin on the rule's wrapper, which is inside
+         the pinned block: ScrollTrigger wraps that block in a `.pin-spacer`
+         with an explicit height, and the child margin no longer collapses
+         through it. The 532px was applied and measured — and the gap it was
+         supposed to produce was 1px. Out here there is no spacer to swallow it.
+
+         Only at `lg`, where the pin runs at all; below that it would be 420px
+         of dead page. -->
+    <div class="mx-auto max-w-[1320px] px-6 md:px-12 md:pt-0 pt-3 lg:mt-[420px]">
+      <!-- `swipe-rail` is bound rather than static: the shared rule for it in
+           main.css runs to 1023px, and between 992 and 1023 this deck is a
+           deck. Wearing the class there would hand it a scroll-snap flex row to
+           fight the sticky stack with. -->
       <div
         ref="deckRef"
-        class="work-deck swipe-rail"
+        class="work-deck"
+        :class="{ 'swipe-rail': isRail }"
         :role="isRail ? 'group' : undefined"
         :aria-roledescription="isRail ? 'carousel' : undefined"
         :aria-label="isRail ? 'Selected work' : undefined"
@@ -331,8 +558,17 @@ onBeforeUnmount(() => {
             :class="{ 'work-card--peek': isRail && active !== i }"
             :style="{ '--index': i, zIndex: i + 1 }"
           >
-            <div class="work-card__grid grid grid-cols-1 items-center gap-4 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-8">
-              <div class="reveal min-w-0 xl:max-w-[270px]">
+            <!-- Three layouts, not two.
+
+                 At `xl` the card is a row of three: copy, shot, stack. Below
+                 `deck` it is a single column with the shot on top. In between it
+                 is two columns — copy over stack on the left, shot on the right
+                 — and that middle case exists so the deck can keep stacking down
+                 to 992px. A single-column card at this width is about 840px
+                 tall, which is taller than the frame it would have to pin
+                 inside; a two-column one is about 430px, which is not. -->
+            <div class="work-card__grid grid grid-cols-1 items-center gap-4 deck:grid-cols-[minmax(0,1fr)_auto] deck:gap-7 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-8">
+              <div class="reveal min-w-0 deck:self-end xl:max-w-[270px] xl:self-auto">
                 <div class="flex items-center gap-2.5">
                   <span class="font-data text-[12px] text-steel">{{ String(i + 1).padStart(2, '0') }}</span>
                   <span class="font-data text-[10px] uppercase tracking-[0.18em] text-accent-text">
@@ -346,14 +582,14 @@ onBeforeUnmount(() => {
               </div>
 
               <figure
-                class="work-hero order-first w-full overflow-hidden rounded-[12px] bg-paper-soft ring-1 ring-hair xl:order-none xl:w-auto xl:aspect-[3/2]"
+                class="work-hero order-first w-full overflow-hidden rounded-[12px] bg-paper-soft ring-1 ring-hair deck:order-none deck:col-start-2 deck:row-span-2 deck:row-start-1 deck:w-auto deck:aspect-[3/2] xl:col-start-auto xl:row-span-1"
               >
                 <img
                   v-if="project.image"
                   :src="project.image"
                   :alt="`${project.brand} ${project.title} screenshot`"
                   loading="lazy"
-                  class="h-full w-full object-cover object-top max-xl:aspect-[3/2]"
+                  class="h-full w-full object-cover object-top max-deck:aspect-[3/2]"
                 />
                 <div
                   v-else
@@ -363,7 +599,10 @@ onBeforeUnmount(() => {
                 </div>
               </figure>
 
-              <div class="work-card__foot reveal min-w-0 xl:max-w-[230px] xl:justify-self-end xl:text-right">
+              <!-- In the two-column case this sits under the copy rather than
+                   in a column of its own, which is what keeps the shot's height
+                   the card's height. -->
+              <div class="work-card__foot reveal min-w-0 deck:col-start-1 deck:row-start-2 deck:self-start xl:col-start-auto xl:row-start-auto xl:max-w-[230px] xl:justify-self-end xl:self-auto xl:text-right">
                 <span class="block font-data text-[10px] uppercase tracking-[0.18em] text-steel">Stack</span>
                 <p class="mt-1.5 font-data text-[12px] leading-relaxed text-ink">{{ project.tech }}</p>
 
@@ -384,7 +623,7 @@ onBeforeUnmount(() => {
           </article>
         </template>
 
-        <div aria-hidden="true" class="work-stack-tail hidden xl:block" />
+        <div aria-hidden="true" class="work-stack-tail hidden deck:block" />
       </div>
 
       <div class="swipe-dots">
@@ -443,6 +682,24 @@ section {
   --hero: max(180px, min(370px, calc(100vh - 2 * var(--band) - 120px)));
 }
 
+/* The two-column deck: same derivation, lower cap.
+
+   The shot's width follows its height through the 3:2 aspect, and in two
+   columns whatever it takes comes straight out of the copy beside it. At the
+   full 370px cap that is a 555px shot against a 257px column of text at
+   1000px wide — legible, but the card reads as a screenshot with a caption
+   rather than a project with a picture. 290px puts the shot at 435 and gives
+   the copy back about 120px, which is the difference between two words a line
+   and four.
+
+   Only in this band: at `xl` the card has a third column and the shot is no
+   longer competing with the copy for the same space. */
+@media (min-width: 992px) and (max-width: 1279px) {
+  section {
+    --hero: max(180px, min(290px, calc(100vh - 2 * var(--band) - 120px)));
+  }
+}
+
 /* Cards pile into a deck, each offset 10px below the previous one so the
    covered cards keep a visible edge. Purely `position: sticky` — the
    compositor drives it, so it cannot stutter the way a scrubbed transform
@@ -468,10 +725,10 @@ section {
 }
 
 /* Height-driven so the 3:2 screenshot is never cropped; the width follows.
-   Only applies where the card is a three-column row — below xl it stacks and
+   Only applies where the card is a horizontal row — below `deck` it stacks and
    the image goes full-width, which is why this is a media query and not a
    plain rule. */
-@media (min-width: 1280px) {
+@media (min-width: 992px) {
   .work-hero {
     height: var(--hero);
   }
@@ -552,10 +809,12 @@ section {
   );
 }
 
-/* Below xl the card is a single stacked column (image over text), so there is
-   no deck to pin — and pinning one on a phone is a scroll-hijack that fights
-   the user anyway. Must stay in step with the xl: prefixes in the template. */
-@media (max-width: 1279px) {
+/* Below `deck` the card is a single stacked column (image over text), so there
+   is no deck to pin — a card that shape is about 840px tall, which cannot pin
+   inside a frame shorter than itself — and pinning one on a phone is a
+   scroll-hijack that fights the user anyway.
+   Must stay in step with the deck: prefixes in the template. */
+@media (max-width: 991px) {
   .work-card {
     position: static;
     margin-bottom: 2.5rem;
@@ -575,7 +834,7 @@ section {
 /* The rail. Must come after the block above so its margin reset wins, and
    must stay in step with `.swipe-rail` in assets/css/main.css and with
    RAIL_QUERY in composables/useSwipeRail.ts. */
-@media (max-width: 1023px) {
+@media (max-width: 991px) {
   .work-deck {
     /* Matches the container's px-6, so the first card starts on the same
        margin as the heading over it. */
@@ -648,7 +907,7 @@ section {
   }
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (min-width: 768px) and (max-width: 991px) {
   .work-deck {
     /* Follows the container to md:px-12. */
     --rail-gutter: 3rem;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { BALL_QUERY, ballPerches, type Perch } from '~/composables/useScrollBall'
+import { BALL_QUERY, ballEntry, ballPerches, type Perch } from '~/composables/useScrollBall'
 
 // One ball for the whole page. It starts perched in the hero's headline, rides
 // it sideways, then falls, rolls and lands its way down through every section
@@ -285,8 +285,15 @@ onMounted(() => {
 
     // The ball must not be sitting in the headline before the headline has
     // finished arriving.
+    //
+    // Nor before it has been put there. With a player in the hero the ball
+    // starts the page at his foot, and the volley is what puts it on the
+    // headline — so where one is mounted, the entry he drives replaces this
+    // timer rather than racing it. See `ballEntry`. Without a player the timer
+    // is still the answer, which is what keeps this component standalone.
     const intro = { v: 0 }
     gsap.to(intro, { v: 1, duration: 0.7, delay: 1.05, ease: 'power2.out' })
+    const entered = () => (ballEntry.claimed ? ballEntry.v : intro.v)
 
     const resort = () => {
       ballR = ball.offsetWidth / 2
@@ -1027,7 +1034,7 @@ onMounted(() => {
           atRest || homing ? 1 : clamp01((vh - (cy - ballR)) / FADE_PX),
           clamp01((cx + ballR) / FADE_PX),
           clamp01((vw - (cx - ballR)) / FADE_PX)
-        ) * intro.v
+        ) * entered()
       )
     }
 
@@ -1084,8 +1091,8 @@ onBeforeUnmount(() => {
   /* Under the nav's z-100 — the ball passes behind the bar rather than over
      it. Above everything else, including the work deck's blur band. */
   z-index: 90;
-  width: clamp(32px, 2.8vw, 46px);
-  height: clamp(32px, 2.8vw, 46px);
+  width: clamp(28px, 2.4vw, 40px);
+  height: clamp(28px, 2.4vw, 40px);
   border-radius: 9999px;
   background: radial-gradient(circle at 34% 28%, #ffa877, #ff7c3e 40%, #e8551c 76%, #c6420f);
   box-shadow: 0 10px 18px -10px rgba(198, 66, 15, 0.55);

@@ -20,6 +20,23 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
  */
 export const BALL_QUERY = '(min-width: 1024px)'
 
+/**
+ * How far the ball has entered play, 0–1.
+ *
+ * The hero's player starts the page holding the ball — he is juggling it, and
+ * at the top of the page that ball is his rather than the journey's. The volley
+ * is the handover, and this is what stops the two ever being on screen at once:
+ * TheScrollBall multiplies its opacity by `v`, so until the strike lands there
+ * is no second ball sitting up in the headline.
+ *
+ * `claimed` is the escape hatch. Nothing else on the page knows whether a
+ * player is mounted — he is absent from any build that drops him, and Vue gives
+ * no ordering guarantee about which of the two mounts first — so the ball
+ * cannot simply wait to be handed over. A player raises this on mount, and
+ * without it the ball keeps the timed intro it has always had.
+ */
+export const ballEntry = { v: 0, claimed: false }
+
 export interface Perch {
   /**
    * The surface the ball rides, resolved on every frame rather than captured.
@@ -256,6 +273,20 @@ export function useBallPerch(
     end?: string | number | (() => string | number)
     from?: Fraction
     to?: Fraction
+    /**
+     * Hands the ball this section's own clock — and, as a side effect, makes
+     * the perch *anchored*, which is the reason a caller usually wants it.
+     *
+     * A free perch's window is the ball's to move: layout() spends the scroll
+     * in a run on the legs that need it and may hand the ball over well before
+     * a declared start. That is right for a rule the ball merely passes along,
+     * and wrong for anything that has to coincide with something else on the
+     * page. Measured on a pinned section: the roll and the strike that ends it
+     * both played 290px before the hold they were declared inside.
+     *
+     * See `progress` on Perch for the clock half of what this does.
+     */
+    progress?: () => number
     exitX?: () => number
     exitY?: () => number
     holdExit?: boolean
@@ -291,6 +322,7 @@ export function useBallPerch(
         range: () => [st.start, st.end],
         from: opts.from,
         to: opts.to,
+        progress: opts.progress,
         exitX: opts.exitX,
         exitY: opts.exitY,
         holdExit: opts.holdExit,

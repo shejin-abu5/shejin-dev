@@ -63,22 +63,6 @@ const HERO_LEAVE_X = () => Math.max(0.2 * window.innerWidth, 210)
 // left to give.
 const HERO_HOLD_X = () => Math.max(0.09 * window.innerWidth, 120)
 
-// How far the phone's ball turns across the hero's pinned read — see .hero-orb.
-//
-// It stays where it is put and only spins, so this is a rate rather than a
-// consequence: there is no surface travelling under it to derive a rotation
-// from, the way the scroll ball derives one from the distance it has rolled.
-//
-// A turn and a half over ~66vh of scroll. Enough that a flick produces obvious
-// movement — the whole point, since a ball that turns imperceptibly is the idle
-// loop this replaced — and little enough that the poles stay readable as poles
-// instead of smearing into a band.
-//
-// Negative, because that is the direction everything else in this frame is
-// going: the headline slides left for the whole of the same window, and a ball
-// turning the other way reads as fighting it.
-const ORB_SPIN = -540
-
 /**
  * The scroll at which the mark's centre reaches HERO_LEAVE_X, as a ScrollTrigger
  * end offset. Re-invoked on every refresh, so a resize re-resolves it.
@@ -422,50 +406,17 @@ onMounted(() => {
     )
   })
 
-  // The phone's ball, spinning. What it replaces was a CSS keyframe loop, and
-  // the complaint about that one is exactly right: it hopped at 1.5s whatever
-  // the page was doing, so it was the one thing in the hero that did not answer
-  // to the scrollbar. Everything around it — the slide, the ink, the ball on
-  // desktop — is scrubbed, and a loop next to that reads as a spinner.
+  // The phone's spinning orb used to live here, and the player has taken its
+  // job. Both existed to stop the phone hero being a headline on an empty
+  // screen, and only one of them can: they are both a large orange sphere in
+  // the middle of the same frame, and two of those is one too many.
   //
-  // The ball itself does not move. It holds the middle of the frame for the
-  // whole of the pinned read and only turns, which is what the read is: the
-  // heading travels a viewport and a half across a ball that stays put. Give
-  // the ball a path of its own and there are two things moving past each other
-  // and no fixed point to read either against.
-  //
-  // Scrubbed against the same window as the slide, and at the same 0.5, so the
-  // two are smoothed identically and the ball stops turning on the same frame
-  // the heading runs out of travel. Below `md` only: the real scroll ball takes
-  // the job over from 1024px up, and between the two there is no gap to fill.
-  mm.add('(max-width: 767px)', () => {
-    const wrap = wrapRef.value
-    const frame = wrap?.querySelector<HTMLElement>('.hero-frame')
-    const spin = wrap?.querySelector<HTMLElement>('.hero-orb-spin')
-    if (!wrap || !frame || !spin) return
-
-    // Only the spin layer, never the ball. The ball carries the `translateX`
-    // that centres it on its CSS `left`, and the sphere's own shading has to
-    // stay put while the marks on top of it turn — light does not orbit with a
-    // ball. See .hero-orb-spin.
-    gsap.fromTo(
-      spin,
-      { rotation: 0 },
-      {
-        rotation: ORB_SPIN,
-        ease: 'none',
-        scrollTrigger: {
-          trigger: wrap,
-          start: 'top top',
-          // The slide's own end, written out again rather than shared: the
-          // block above resolves it inside its own matchMedia scope.
-          end: () => `+=${Math.max(1, wrap.offsetHeight - frame.offsetHeight)}`,
-          scrub: 0.5,
-          invalidateOnRefresh: true
-        }
-      }
-    )
-  })
+  // The player is the better answer to the same problem for the reason the orb
+  // never quite settled — the note that replaced its CSS loop with a scrub is
+  // right that a sphere turning on a timer reads as a spinner, and scrubbing it
+  // only meant the top of the page was motionless until someone scrolled. A
+  // figure keeping a ball up is doing something either way, and the ball he is
+  // juggling is the same ball the rest of the page rides. See ThePlayer.vue.
 })
 
 onUnmounted(() => {
@@ -479,10 +430,6 @@ onUnmounted(() => {
       class="hero-frame sticky top-0 flex h-screen flex-col justify-center overflow-hidden pt-[70px] md:pt-0"
     >
       <div class="hero-pad w-full px-5 md:-translate-y-[6vh] md:px-8">
-        <div class="hero-orb md:hidden" aria-hidden="true">
-          <span class="hero-orb-ball"><span class="hero-orb-spin" /></span>
-        </div>
-
         <div ref="trackRef" class="hero-track relative grid w-max will-change-transform">
           <component
             :is="layer === 'ink' ? 'h1' : 'div'"
@@ -493,7 +440,7 @@ onUnmounted(() => {
             :class="layer === 'ghost' ? 'flex text-hair' : 'hero-ink text-ink'"
           >
             <span class="block overflow-hidden">
-              <span class="hero-line block">Frontend</span>
+              <span class="hero-line block">Shejin Abu</span>
             </span>
 
             <span
@@ -512,12 +459,24 @@ onUnmounted(() => {
                 <em
                   class="not-italic"
                   :class="layer === 'ghost' ? 'text-accent/20' : 'text-accent'"
-                >UI</em>
-                Developer
+                >Frontend</em>
+                Dev
               </span>
             </span>
           </component>
         </div>
+      </div>
+
+      <!-- The bottom of the frame, which is where the blank space was. He is
+           inside the pinned frame rather than in the page under it, so he holds
+           that band for the whole of the hero's read instead of scrolling out
+           of it after a screen. -->
+      <div class="hero-player">
+        <!-- Aimed at the same mark the page's ball perches on, so the volley
+             lands where the journey picks it up. Passed as a getter because
+             markRef is not resolved when ThePlayer is created, and because the
+             mark slides across the frame while the hero is read. -->
+        <ThePlayer variant="hero" :aim-at="() => markRef" />
       </div>
 
       <div class="hero-cta top-[6em] flex flex-wrap items-center gap-2.5 px-5 md:hidden">
@@ -593,21 +552,30 @@ onUnmounted(() => {
    full one are the same ~66vh of slide. Change one without the other and the
    heading's travel speeds up or slows down. */
 @media (max-width: 767px) {
-  /* The box the ball is centred on. .hero-track inside it is already
-     `relative`, so this changes nothing about the slide — it only gives the
-     absolutely placed ball a containing block that is the heading's own row
-     rather than the whole frame, which is what keeps the two centred on each
-     other at any height. */
-  .hero-pad {
-    position: relative;
+  /* Room at the foot of the frame for the player to stand in.
+
+     The frame is `h-screen` and `flex flex-col justify-center`, and with
+     border-box sizing a bottom pad shrinks the box its contents are centred in
+     without changing the frame's height — so this lifts the heading and the
+     buttons as a pair and hands the bottom third to him. Without it they are
+     centred on the whole screen and his head is in the button row: he is a
+     third of a phone tall, which is what it takes for a figure to read as one
+     rather than as an icon.
+
+     It also answers what removing the orb left behind. That ball filled the
+     middle of this frame, and taking it out for a figure standing at the foot
+     of the frame emptied the very part of the screen the complaint was about.
+     Moving the type down onto him closes the gap rather than relocating it. */
+  .hero-frame {
+    padding-bottom: 26vh;
   }
 
-  /* And this is the other half of that: the ball is centred on the heading and
-     is taller than it, so its foot reaches ~20px into the button row below.
-     Positioning .hero-pad above makes it a positioned box, and positioned boxes
-     paint after in-flow ones whatever the DOM order — so without this the ball
-     covers the top of both buttons. `relative` with no offset puts .hero-cta
-     back in front of it on the strength of coming later. */
+  /* The buttons sit above the player rather than behind him. He is absolutely
+     placed and therefore paints after the in-flow rows whatever the DOM order,
+     and at phone widths his shoulder can still reach the button row — `relative`
+     with no offset puts .hero-cta back in front on the strength of coming
+     later. (The orb this rule was originally written for is gone; the reason
+     survived it intact.) */
   .hero-cta {
     position: relative;
   }
@@ -620,89 +588,61 @@ onUnmounted(() => {
   }
 }
 
-/* Centred on the heading's row, in both axes, and behind it.
+/* Stood on the floor of the pinned frame.
 
-   Vertically on .hero-pad rather than on the frame: the heading is centred in a
-   flex column whose contents and padding both change with the viewport, so the
-   frame's middle and the heading's middle are not the same point and only one
-   of them is the one the ball has to agree with.
+   Bottom-left rather than centred, and that is about the headline rather than
+   about him: the track is `w-max` and starts flush with the gutter, so at
+   scroll 0 the type occupies the top-left and runs off the right edge. A figure
+   under the middle of the frame stands under a gap; a figure at the left stands
+   under the word, and the volley then travels up and to the right into the
+   space the heading is about to vacate as it slides.
 
-   Horizontally on the viewport, which means it holds still while the track
-   slides across it. That is the whole read — the type travels, the ball does
-   not — and it is also why the ball is not anchored to anything inside the
-   track: the track's own middle is a viewport and a half wide and leaves the
-   frame entirely. */
-.hero-orb {
+   Sized against the viewport's width *and* its height, which is what the inner
+   `min()` is for. What he must not do is reach the headline, and the headline's
+   position is a function of height while his own size would otherwise be a
+   function of width — so the two are only safely apart at the aspect ratios you
+   happened to test. Measured at 1600×900, sized on width alone at this scale he
+   stood with his head inside the word FRONTEND; the 38vh arm is what holds him
+   clear on a short, wide screen without shrinking him on a tall one.
+
+   The figure is ~1.42 units tall for every 1 wide, so 38vh of width is ~54vh of
+   player — the bottom half of the frame, which is the half the heading is not
+   using. */
+.hero-player {
   position: absolute;
-  top: 50%;
+  bottom: 0;
   left: 50%;
+  z-index: 1;
+  width: clamp(215px, min(66vw, 34vh), 300px);
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
-/* Centred on that point rather than hung off an edge, so the ball stays on the
-   heading's midline whatever the clamp below resolves to.
+@media (min-width: 768px) {
+  .hero-player {
+    left: clamp(16px, 3vw, 64px);
+    width: clamp(280px, min(24vw, 38vh), 390px);
+    transform: none;
+  }
+}
 
-   The position is CSS's alone. Nothing in <script> writes to this element, so
-   the ball is where it belongs whether or not the script ever runs, and the
-   scrub has one property on one layer to think about.
+/* The accent bloom the orb used to carry, kept and moved onto the player.
 
-   Same stops as .scroll-ball, so the phone's ball and the desktop's are
-   recognisably one object rather than two oranges. */
-.hero-orb-ball {
+   It is the one part of that orb worth surviving it. Its job there was to stop
+   a hard orange disc reading as pasted onto the page, and it does the same job
+   here for the same reason: a flat vector figure standing on white has no
+   light around it, and without this he is a sticker. Wider and softer than the
+   orb's, because it is lighting a figure rather than haloing a sphere.
+
+   Behind him, and behind the type — z-index on .hero-player puts the figure
+   above this and the stacking context keeps both under the heading. */
+.hero-player::before {
+  content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  width: clamp(140px, 44vw, 190px);
-  height: clamp(140px, 44vw, 190px);
+  z-index: -1;
+  inset: 18% -34% -14%;
   border-radius: 9999px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle at 34% 28%, #ffa877, #ff7c3e 40%, #e8551c 76%, #c6420f);
-  box-shadow: 0 26px 44px -24px rgba(198, 66, 15, 0.6);
-}
-
-/* A soft accent bloom a little under three times the ball's width, which is
-   what stops the sphere reading as a hard disc pasted behind the type and lets
-   it sit in the page as light instead. */
-.hero-orb-ball::before {
-  content: '';
-  position: absolute;
-  inset: -70%;
-  border-radius: inherit;
-  background: radial-gradient(circle, rgba(255, 124, 62, 0.17), rgba(255, 124, 62, 0) 62%);
-}
-
-/* The sphere's shading is fixed — light does not orbit with the ball — so the
-   rotation lives on this layer, and needs marks on it to be legible at all. Two
-   soft poles read as a rolling ball; a bare gradient reads as one sliding.
-   Same idea as .scroll-ball-spin, for the same reason.
-
-   Not the same figures, though, and the difference is the whole of what a mark
-   at this size has to answer for. That ball is 46px and its poles are a hard
-   17% disc, which at that scale is a dot. This one is 172px — nearly four times
-   across — and the identical proportions came out as two 30px craters with a
-   cut edge, which reads as a texture on the ball rather than as the ball
-   turning. Smaller against the sphere and faded rather than cut: enough to
-   carry a turn and a half, not enough to be looked at.
-
-   This layer is the only thing the scrub touches, which is why the will-change
-   is here and not on the ball — see ORB_SPIN. */
-.hero-orb-spin {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at 50% 15%, rgba(139, 44, 8, 0.22) 0 7%, rgba(139, 44, 8, 0) 18%),
-    radial-gradient(circle at 50% 85%, rgba(139, 44, 8, 0.22) 0 7%, rgba(139, 44, 8, 0) 18%);
-  will-change: transform;
-}
-
-/* Specular highlight, above the spinning layer and deliberately outside it. */
-.hero-orb-ball::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(circle at 33% 25%, rgba(255, 255, 255, 0.5), transparent 45%);
+  background: radial-gradient(circle, rgba(255, 124, 62, 0.15), rgba(255, 124, 62, 0) 66%);
 }
 
 /* The static fallback that used to live here — unwinding .hero-scroll's spacer

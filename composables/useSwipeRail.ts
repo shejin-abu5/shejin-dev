@@ -1,9 +1,13 @@
 /**
- * Below this width Projects and Experience present as swipe rails. It is the
+ * Below this width Skills and Experience present as swipe rails. It is the
  * same line as BALL_QUERY in useScrollBall.ts and as the `max-width: 1023px`
  * blocks in main.css and both section stylesheets — the rail exists exactly
- * where the ball, the deck and the chart don't, so the two must never
- * disagree about which presentation is running.
+ * where the ball and the chart don't, so the two must never disagree about
+ * which presentation is running.
+ *
+ * Selected Work is the exception and passes its own line: its cards stack as a
+ * deck from 992px, which is lower than this, so between the two it is neither
+ * a rail nor a chart but a deck. See the `deck` screen in tailwind.config.ts.
  */
 export const RAIL_QUERY = '(max-width: 1023px)'
 
@@ -25,10 +29,14 @@ export const RAIL_QUERY = '(max-width: 1023px)'
  * @param slideSelector Matches the slides *within* it. Explicit because both
  *                      rails carry non-slide children — the work deck's
  *                      sentinel and its trailing spacer.
+ * @param query         Where this particular rail applies. Defaults to
+ *                      RAIL_QUERY; Selected Work overrides it because its deck
+ *                      reaches further down than the others do.
  */
 export function useSwipeRail(
   railFn: () => HTMLElement | null,
-  slideSelector: string
+  slideSelector: string,
+  query: string = RAIL_QUERY
 ) {
   const active = ref(0)
   /** Whether the rail presentation is the one currently running. Drives the
@@ -108,7 +116,7 @@ export function useSwipeRail(
   }
 
   onMounted(() => {
-    mql = window.matchMedia(RAIL_QUERY)
+    mql = window.matchMedia(query)
     onQueryChange(mql)
     mql.addEventListener('change', onQueryChange)
   })

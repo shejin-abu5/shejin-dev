@@ -168,7 +168,21 @@ const MIN_ROLL = 150
 // scrolling, the same shape as the float-deck variant: one scalar `p` scrubs
 // the pin, and every position is a pure function of it. Scrubbing backwards
 // and parking mid-fall therefore both fall out for free.
-const LEAD_IN_U = 0.42
+// Idle units at the head of the pin, before the first card opens — and now
+// also the header.
+//
+// 0.42 was enough to settle the pin and nothing more: ~160px of scroll at a
+// 900px viewport. The jumping header was played *before* the pin, on a section
+// still travelling past at the page's own speed, which is exactly the thing
+// that made it hard to watch.
+//
+// Widened to 1.9 units, about 720px, the whole move fits inside the hold. This
+// is deliberately expressed in the chart's own units rather than as a second
+// pin: the pin on this section is the most carefully sized thing in the file,
+// `slice()` already maps units onto its scroll, and a second ScrollTrigger
+// pinning the same element would have to reason about the first one's spacing.
+// Lead-in is a hold the chart already understood how to keep.
+const LEAD_IN_U = 1.9
 const LEAD_OUT_U = 0.48
 // Held equal to OPEN_U and CLOSE_U below, and that is not a coincidence: the
 // card being left closes over CLOSE_U from the moment the ball leaves it, and
@@ -202,6 +216,7 @@ const ROLL_MAX_U = 2
 // roles this comes to ~2.7 screens of pin.
 const UNIT_VH = 42
 
+const headerRef = ref<HTMLElement | null>(null)
 const sectionRef = ref<HTMLElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
 const chartRef = ref<HTMLElement | null>(null)
@@ -375,7 +390,17 @@ onMounted(() => {
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: sectionRef.value,
-        start: 'top top',
+        // Held 120px clear of the top rather than flush against it.
+        //
+        // The header is played during this pin's lead-in, and he stands on the
+        // ruler with the ball perched above his head — so pinning flush put
+        // that ball about 95px down the frame, which is inside the ball's own
+        // top fade band (FADE_PX, 190px). It headed the ball at 60% opacity.
+        //
+        // The stage is a viewport tall with its frame centred inside, so 120px
+        // of slack costs nothing that shows: measured, the frame runs 513px of
+        // that 900 and still clears the bottom.
+        start: 'top top+=120',
         end: () => `+=${(UNIT_VH / 100) * window.innerHeight * totalU}`,
         pin: true,
         pinSpacing: true,
@@ -430,6 +455,51 @@ onMounted(() => {
       })
     )
 
+    /**
+     * His head, as a surface the ball lands on before the chart gets it.
+     *
+     * Without this there is nothing here to head. Measured, the ball comes into
+     * this section along the card's own line — it crosses off the right of the
+     * work deck, re-enters at the left edge and settles onto the first row at
+     * about y=408 against a row top of 427 — so it arrives at knee height and
+     * never passes above anybody. A header cannot be fitted to that path; the
+     * ball has to be sent somewhere it can be headed from.
+     *
+     * So he is given a perch of his own. The ball's engine aims a crossing at
+     * whatever surface comes next, and a surface is just an element — his box,
+     * whose top edge sits a head's height above him and is exactly where a
+     * jumping header makes contact. It arrives there, he heads it, and the fall
+     * out of this perch carries it down onto the first card.
+     *
+     * `from` and `to` are the same point because a head is not something a ball
+     * rolls along. The window is declared rather than derived for the same
+     * reason: with no roll distance there is nothing for layout() to size it
+     * from, and a perch with no window is one the ball passes through.
+     */
+    const headOff = registerPerch({
+      surface: () => headerRef.value,
+      // A slice of the pin's lead-in, which is what makes it watchable: the
+      // section is held still for all of it and the chart has not begun moving.
+      //
+      // Derived through `slice()` rather than from a trigger of its own, for
+      // the same reason every other perch here is — that function is the single
+      // place units become scroll, so a window built from it cannot drift out
+      // of step with the hold it is meant to sit inside. A separate trigger did
+      // drift: struck at `top 56%` it ran *before* the pin started, and he
+      // headed the ball on a section still sliding past at the page's speed.
+      //
+      // Ends short of LEAD_IN_U so the ball is off his head before the first
+      // card starts opening underneath it.
+      range: () => [slice(0.2), slice(LEAD_IN_U - 0.3)],
+      from: 0.5,
+      to: 0.5,
+      // Shorter than a crossing between sections: the first card is directly
+      // below him, and the default would hang the ball in the air over it.
+      fall: 0.22,
+      inset: 0
+    })
+    offs.push(headOff)
+
     // Runs when the query stops matching — a resize past lg, or the OS motion
     // setting flipping. gsap.matchMedia reverts the timeline and the pin
     // itself; this clears what was written by hand, which clearProps does not
@@ -458,15 +528,54 @@ onBeforeUnmount(() => {
   <section id="experience" ref="sectionRef" class="gantt-section">
     <div ref="stageRef" class="gantt-stage">
       <div class="gantt-frame">
-        <header class="gantt-head reveal">
+        <header class="gantt-head reveal relative">
           <span class="gantt-eyebrow">02 — Career</span>
           <h2 class="gantt-title">Experience</h2>
+
+          <!-- Hung off the heading rather than off the chart, and the chart is
+               why: it is pinned and scrubbed, its cards open and close under the
+               ball, and an absolutely placed figure inside that is a figure
+               whose ground line moves. The heading holds still for the whole
+               pinned read, and its foot is the ruler's dashed line — which is
+               the one horizontal in this section that reads as a floor.
+
+               A knee-up, because the chart hands the ball from card to card in
+               short vertical pops rather than rolling it: it is the one touch
+               that is unmistakably a small lift rather than a pass. -->
         </header>
 
         <div class="gantt-ruler" aria-hidden="true">
           <span v-for="tick in ticks" :key="tick.label" class="gantt-tick" :style="{ left: tick.left }">
             <i />{{ tick.label }}
           </span>
+
+          <!-- Stood on the ruler's line, which is the only horizontal between
+               the heading and the chart and reads as a floor.
+
+               `left` is the whole of why he is here rather than at the right of
+               the heading, where he started. The ball's next stop is the first
+               chart row's landing, over at the left — and the ball pays for
+               distance in scroll: from the right-hand edge that crossing wanted
+               ~1100px, and layout() answered by handing him the ball 800px
+               earlier than his window declared, which is below the fold. He
+               leapt and headed it perfectly, underneath the page. From here the
+               same crossing is a third of that and the window stays where it
+               was put.
+
+               38% is measured rather than guessed. The heading's *block* is full
+               width but EXPERIENCE only sets to about a third of it, and at 30%
+               his trailing boot clipped the final E. This clears the word and
+               still keeps the crossing to the chart short.
+
+               `headerRef` is the surface the ball perches on: its *top* edge,
+               which is a head's height above him and exactly where a jumping
+               header makes contact. See the perch registered in <script>. -->
+          <div
+            ref="headerRef"
+            class="pointer-events-none absolute bottom-full left-[38%] hidden w-[var(--cameo)] lg:block"
+          >
+            <ThePlayer move="experience" flip />
+          </div>
         </div>
 
         <div

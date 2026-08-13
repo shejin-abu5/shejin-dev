@@ -10,6 +10,18 @@ export default <Partial<Config>>{
   ],
   theme: {
     extend: {
+      screens: {
+        // Where the work deck starts stacking. Not one of Tailwind's own stops,
+        // because the thing it describes is not a device class — it is the
+        // narrowest width at which a project card still fits a horizontal
+        // layout, and therefore stays short enough for a sticky deck to stack
+        // without the cards running off the bottom of the frame.
+        //
+        // Kept in step with: the `max-width: 991px` blocks in
+        // components/ProjectsSection.vue, `.swipe-rail` in assets/css/main.css,
+        // and RAIL_QUERY in composables/useSwipeRail.ts.
+        deck: '992px'
+      },
       colors: {
         ink: '#121212',
         paper: '#FFFFFF',
