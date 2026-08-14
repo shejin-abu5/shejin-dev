@@ -444,6 +444,10 @@ onMounted(() => {
           const { start, end } = opens[i]
           return (state.p * totalU - start) / Math.max(1e-6, end - start)
         },
+        // Every card here reads `state.p`, so they are neighbours on one clock
+        // and the hops between them are timed on it. Stated rather than inferred
+        // from all of them having a progress — see `clock` in useScrollBall.ts.
+        clock: state,
         // Where this card ends when it is open, whatever it is drawing right
         // now. `to: 1` is a fraction of the live rect and the live rect
         // collapses behind the ball as it leaves, so on the way back up the

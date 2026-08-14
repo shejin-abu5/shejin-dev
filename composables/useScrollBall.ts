@@ -37,6 +37,24 @@ export const BALL_QUERY = '(min-width: 1024px)'
  */
 export const ballEntry = { v: 0, claimed: false }
 
+/**
+ * The ball's own clock: smoothed scroll, in document px, published so that a
+ * section handing the ball a `progress` can read it back.
+ *
+ * A section that owns a moment — a pin the ball is struck inside of — has to
+ * answer "how far along are you" on the *ball's* clock rather than on the
+ * scrollbar's, or it is the two-smoothings problem again from the other side:
+ * the ball's position along the surface would be raw scroll while everything
+ * else about the ball is smoothed, so the one perch that was supposed to be the
+ * best-synchronised on the page became the only one that moved in wheel-sized
+ * steps. Measured on the projects rule at a 900px/s scroll, the roll advanced
+ * in 15px jerks where every other rail on the page was continuous.
+ *
+ * Written by TheScrollBall's ticker, which is also the only thing that advances
+ * it. Zero until that mounts, so read it with a guard for the frames before.
+ */
+export const ballClock = { y: 0 }
+
 export interface Perch {
   /**
    * The surface the ball rides, resolved on every frame rather than captured.
@@ -82,6 +100,26 @@ export interface Perch {
    * is right for a surface that just sits in the page.
    */
   progress?: () => number
+  /**
+   * Which clock `progress` is read off, as an identity token shared by every
+   * perch in a section that reads the same one.
+   *
+   * Two neighbours on one clock get to time the hop between them on it — see
+   * `sameClock` in TheScrollBall — and that is only sound when the clock really
+   * is the same. It used to be inferred: "both have a progress, and two
+   * different scrubbed sections could not be neighbours without a plain perch
+   * between them, so both having one means both having the same one". True while
+   * the experience chart was the only section that handed one over, and a trap
+   * for the next one that does. Two adjacent perches on unrelated clocks time
+   * the hop between them as `out / (out + into)` where both terms are zero, so
+   * the ball sits at the launch point for the whole crossing and then snaps onto
+   * the far end of it.
+   *
+   * Left unset it is a fresh token per perch, which matches nothing: a section
+   * has to say that its perches share a clock before they are treated as
+   * sharing one.
+   */
+  clock?: unknown
   /**
    * Where the ball leaves this perch, as an absolute viewport x, for a surface
    * whose shape is driven by its section's own timeline.
@@ -154,6 +192,34 @@ export interface Perch {
    * takes precedence where a section states one.
    */
   holdExit?: boolean
+  /**
+   * `holdExit`'s mirror image, for the surface being landed *on*: aim the fall
+   * at where this surface will be when the ball gets here, not at where it is
+   * now.
+   *
+   * A fall reads its target live, which is right while the target is roughly
+   * where it will end up and wrong when it is not. The work deck is the case:
+   * the ball steps from one card's top edge to the next, ten pixels below it,
+   * but the next card is still down the page climbing towards its sticky offset
+   * when the hop begins — so a hop aimed live is aimed a long way under the
+   * step it is actually taking. Measured between the deck's second and third
+   * cards, the ball dived 123px below the card it was leaving, then climbed back
+   * as the target arrived: a V, at 3px of drop per px of scroll into it and 1px
+   * per px back out, where the roll either side runs at 0.2.
+   *
+   * A surface in normal flow rises exactly as fast as the page scrolls, so
+   * where it will be at the landing is `to.y - (1 - k) * span` — no capture, the
+   * same value in both directions, and constant across the whole hop when the
+   * surface settles as the ball arrives. The arc is then a plain ten-pixel step
+   * down.
+   *
+   * Opt-in for the same reason `holdExit` is: a target that is already pinned,
+   * or one still a viewport below the fold, has not been travelling with the
+   * page for the whole hop, and the correction would aim the ball above the
+   * frame instead of at the surface. Set it where the next surface is in flow
+   * and close.
+   */
+  holdEntry?: boolean
   /** Px pulled in from each end, so the ball can sit clear of a rounded corner. */
   inset: number
   /**
@@ -219,9 +285,11 @@ export function registerPerch(spec: {
   from?: Fraction
   to?: Fraction
   progress?: () => number
+  clock?: unknown
   exitX?: () => number
   exitY?: () => number
   holdExit?: boolean
+  holdEntry?: boolean
   inset?: number
   side?: boolean
   fall?: number
@@ -233,9 +301,13 @@ export function registerPerch(spec: {
     from: asFn(spec.from, 0),
     to: asFn(spec.to, 1),
     progress: spec.progress,
+    // Unique unless the section names one, so "no clock stated" can never be
+    // mistaken for "the same clock as its neighbour". See `clock` on Perch.
+    clock: spec.clock ?? Symbol('perch-clock'),
     exitX: spec.exitX,
     exitY: spec.exitY,
     holdExit: spec.holdExit ?? false,
+    holdEntry: spec.holdEntry ?? false,
     inset: spec.inset ?? 14,
     side: spec.side ?? false,
     fall: spec.fall ?? null,
@@ -287,9 +359,11 @@ export function useBallPerch(
      * See `progress` on Perch for the clock half of what this does.
      */
     progress?: () => number
+    clock?: unknown
     exitX?: () => number
     exitY?: () => number
     holdExit?: boolean
+    holdEntry?: boolean
     inset?: number
     side?: boolean
     fall?: number
@@ -323,9 +397,11 @@ export function useBallPerch(
         from: opts.from,
         to: opts.to,
         progress: opts.progress,
+        clock: opts.clock,
         exitX: opts.exitX,
         exitY: opts.exitY,
         holdExit: opts.holdExit,
+        holdEntry: opts.holdEntry,
         inset: opts.inset,
         side: opts.side,
         fall: opts.fall,

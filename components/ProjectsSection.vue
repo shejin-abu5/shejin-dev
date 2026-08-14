@@ -2,7 +2,7 @@
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReveal } from '~/composables/useReveal'
-import { BALL_QUERY, registerPerch, useBallPerch } from '~/composables/useScrollBall'
+import { BALL_QUERY, ballClock, registerPerch, useBallPerch } from '~/composables/useScrollBall'
 import { useSwipeRail } from '~/composables/useSwipeRail'
 import newPatrolImg from '~/assets/img/works/new-patrol.webp'
 import partsImg from '~/assets/img/works/Genuine-Nissan-Parts-GHANA.webp'
@@ -155,7 +155,16 @@ const headBlockRef = ref<HTMLElement | null>(null)
  * plus this — so the two are one number and must stay one number. Raise it and
  * the deck starts lower to match; they cannot be tuned apart.
  */
-const HOLD_SCROLL = 420
+// 620 rather than the 420 it ran at, and the roll is what bought the extra 200.
+// The ball crosses 335px of rule between where it lands (`from`) and the boot
+// (DECK_FROM), and it is given CONTACT_AT of this window to do it in — so at 420
+// the roll ran at 1.11px of travel per px of scroll, half again the 0.75 cruise
+// that every plain rail on the page is laid out against, and the fastest roll
+// anywhere on the site. 620 × 0.72 is 446px of scroll for those 335, which is
+// the cruise. The scroll is not wasted while it is spent: the deck's runway is
+// this same number, so what the reader gets for it is the cards climbing into
+// place behind the held heading.
+const HOLD_SCROLL = 620
 /**
  * Where the block comes to rest.
  *
@@ -167,27 +176,51 @@ const HOLD_SCROLL = 420
 const HOLD_START = 'top top+=260'
 
 /**
- * How far through the contact's window we are, 0–1.
+ * The pin, kept so the hold's own geometry can be read back off it.
  *
- * Handed to the rule's perch, which does two things. It gives the ball this
- * block's own clock, so where it sits along the rule is read off the same
- * number the block is being held by. And it marks the perch *anchored*, which
- * is the part that matters here: a free perch's window is the ball's to move,
- * and layout() duly moved this one — measured, the roll and the strike that
- * ends it both played 290px before the hold they were declared inside, so he
- * kicked the ball and only then did the section stop to let you watch.
+ * `holdProgress` used to live here as a ref written from the pin's `onUpdate`,
+ * and it was the wrong number in a way nothing about it looked wrong: a
+ * ScrollTrigger's progress is raw scroll. Everything else about the ball is
+ * smoothed — that is what FOLLOW_TAU is for — so the one perch on the page that
+ * was supposed to be the best synchronised was also the only one whose roll
+ * advanced in wheel-sized steps, and the only one that ran at the page's
+ * instantaneous speed rather than the ball's. See `holdK`.
  */
-const holdProgress = ref(0)
+let holdST: ScrollTrigger | null = null
 
 /**
  * How far into the hold the ball reaches his boot.
  *
  * The perch reads `to` at progress 1, so handed the window's progress raw the
  * ball arrived exactly as it closed — he struck it on the last frame and the
- * entire follow-through fell outside. Finishing the roll at 72% leaves the last
- * quarter of the window for the strike, which is the part worth the room.
+ * entire follow-through fell outside. Finishing the roll at 71% leaves the last
+ * near-third of the window for the strike, which is the part worth the room.
+ *
+ * 0.71 rather than a round number, and it is a measurement rather than a taste:
+ * it is where his boot passes the point the ball comes to rest on. The swing
+ * runs from 0.54 to 0.82 of the hold (`hitAt`/`hitDur` on the `work` cameo) and
+ * the boot crosses the ball's landing x three fifths of the way through it —
+ * measured at 1440×900, x=792 against a ball that stops at 790. Put the ball
+ * there at the same moment and the contact is a contact; the two were 0.08 of
+ * the hold apart before, which is the boot arriving first and swinging through
+ * an empty spot. See the settle note in ThePlayer for why they were.
  */
-const CONTACT_AT = 0.72
+const CONTACT_AT = 0.71
+
+/**
+ * The hold's progress on the ball's clock — the one number the roll, the
+ * wind-up and the strike are all three read off.
+ *
+ * Not the pin's own progress: that is raw scroll, and the ball is smoothed. Two
+ * smoothings of one scroll position are two different numbers, and the file this
+ * is imported from carries the measurements of what that costs.
+ */
+const holdK = () => {
+  const st = holdST
+  if (!st) return 0
+  const span = Math.max(1, st.end - st.start)
+  return gsap.utils.clamp(0, 1, (ballClock.y - st.start) / span)
+}
 const stackEnded = ref(false)
 
 // Below lg the deck is a swipe rail — see composables/useSwipeRail.ts and
@@ -246,6 +279,28 @@ const { active, isRail, goTo } = useSwipeRail(
 const DECK_FROM = 0.56
 const DECK_TO = 0.88
 
+/**
+ * Px pulled in from each end of the *rule*, so the ball sits clear of its ends.
+ *
+ * Stated rather than left to the ball's own default, because the player's
+ * position is derived from it — see `.work-player` — and a handover point
+ * measured two different ways is a boot and a ball in two different places. Not
+ * the deck's 26: that one is clearing a card's corner radius, this one is the
+ * end of a hairline, and they are only the same kind of number by coincidence.
+ */
+const RAIL_INSET = 14
+/**
+ * Where his striking boot sits across his own box, as a fraction of its width.
+ *
+ * The same point CONTACT_X names in ThePlayer, which is where a *tracked* cameo
+ * measures the ball's approach from. This cameo is not tracked — it is driven by
+ * the hold's clock — so nothing in the script consults it, and the alignment is
+ * geometric instead: he has to be standing such that this point on him lands on
+ * DECK_FROM. Measured at 1440×900 against the live rig, the boot's centre at the
+ * moment of contact sits at 0.717 of his box.
+ */
+const BOOT_AT = 0.72
+
 // The ball rides down the deck: the rule under the section heading first, then
 // the top edge of each card as that card comes to the front of the stack.
 //
@@ -289,7 +344,16 @@ useBallPerch(() => railRef.value, {
   //
   // Short enough that the roll runs near ROLL_SPEED and the slack goes back to
   // the fall, which is the leg that has somewhere to be.
-  end: `+=${HOLD_SCROLL}`,
+  //
+  // It closes at the contact rather than at the end of the hold, which is a
+  // change of a third of the window. A perch's window is how long the ball is
+  // *on* it, and the ball is on this rule until it is kicked — held open to the
+  // end of the pin instead, it sat parked at the boot for the last 180px of
+  // scroll while the follow-through swung out and came back through it, which is
+  // a struck ball that has not gone anywhere. Ending here hands those 180px to
+  // the crossing down onto the deck, which is the leg that is supposed to have
+  // them: it is the flight off his foot.
+  end: `+=${Math.round(HOLD_SCROLL * CONTACT_AT)}`,
   // The ball lands part-way along the rule rather than at its left-hand end,
   // and that is about *when* the handover happens rather than where.
   //
@@ -308,10 +372,13 @@ useBallPerch(() => railRef.value, {
   // touches down is a free choice.
   from: 0.28,
   to: DECK_FROM,
-  // The hold's own clock — see `holdProgress`. Also what stops layout() moving
-  // this window out from under the pin. Compressed into the first CONTACT_AT of
-  // it so the strike lands with the hold still running.
-  progress: () => Math.min(1, holdProgress.value / CONTACT_AT)
+  // The ball's own default, written down — see RAIL_INSET. `.work-player`
+  // resolves DECK_FROM through the same number to stand him on it.
+  inset: RAIL_INSET,
+  // The hold's own clock — see `holdK`. Also what stops layout() moving this
+  // window out from under the pin. Compressed into the first CONTACT_AT of it so
+  // the strike lands with the hold still running.
+  progress: () => Math.min(1, holdK() / CONTACT_AT)
 })
 
 let stackEndObserver: IntersectionObserver | null = null
@@ -341,10 +408,9 @@ onMounted(() => {
     if (!el) return
 
     // Pinned without spacing, and the deck's runway is what makes that work —
-    // see the rule's wrapper in the template. It also publishes a progress
-    // value: the ball's perch and the player's scrub both read it, so the roll,
-    // the wind-up and the strike are three views of one number and cannot
-    // drift.
+    // see the rule's wrapper in the template. Its start and end are also the
+    // hold's geometry, which `holdK` reads back so the roll, the wind-up and the
+    // strike are three views of one number and cannot drift.
     const st = ScrollTrigger.create({
       trigger: el,
       start: HOLD_START,
@@ -352,15 +418,13 @@ onMounted(() => {
       pin: true,
       pinSpacing: false,
       anticipatePin: 1,
-      invalidateOnRefresh: true,
-      onUpdate: (self) => {
-        holdProgress.value = self.progress
-      }
+      invalidateOnRefresh: true
     })
+    holdST = st
 
     return () => {
       st.kill()
-      holdProgress.value = 0
+      holdST = null
     }
   })
 
@@ -432,19 +496,85 @@ onMounted(() => {
 
     const step = (i: number) => DECK_FROM + (DECK_TO - DECK_FROM) * (i / deck.length)
 
+    /**
+     * The clock every card in the deck reads, and the reason they read one at
+     * all.
+     *
+     * These were free perches, and a free perch's window is the ball's to move:
+     * layout() spends the scroll between two anchors on the legs that need it,
+     * and it may hand a perch over earlier than the section asked for when the
+     * run as a whole is short of room. This run always is — six cards declaring
+     * a screenful each, plus a sideways exit, against the page between the
+     * heading and the experience chart — so every card after the first was
+     * handed over early, further each time. Measured: the third card's window
+     * opened 174px of scroll before that card had finished stacking, so the step
+     * onto it was aimed 174px lower than the step actually is, and the ball dived
+     * a hundred-odd pixels below the deck and climbed back out as the card
+     * arrived. That is the drop between cards that does not read as a drop.
+     *
+     * But a card is ridable exactly while it is the front card, and when that is
+     * is a fact about the sticky stack rather than a budget: it is the same kind
+     * of window the experience chart's cards have, and it belongs to the section
+     * for the same reason. Anchored, each window sits where the card really is,
+     * the step is the ten pixels it looks like, and nothing is compressed.
+     *
+     * A plain object as the identity: the six of them share this clock, and the
+     * projects rule above and the chart below must not be mistaken for sharing
+     * it. See `clock` in useScrollBall.ts.
+     */
+    const deckClock = {}
+
+    /**
+     * How much of a card's turn at the front is the step onto the next card
+     * rather than a roll along this one.
+     *
+     * The windows are contiguous — a card's turn ends where the next one's
+     * begins — so without this the step would have no scroll to happen in and
+     * the ball would change cards between one frame and the next. 0.15 of a
+     * card's turn is 69px of scroll for a 10px drop, which is 0.15px of travel
+     * per px of scroll: the same pace as the roll it interrupts (62px of rule
+     * over the other 392px), so the ball does not change speed to step down.
+     */
+    const CARD_HOP = 0.15
+
+    /** Where card `i`'s roll ends and the step onto card `i + 1` begins. */
+    const ridableTo = (i: number) => {
+      const a = sts[i].start
+      const b = sts[i].end
+      // The last card has nothing to step onto — it leaves sideways — so it
+      // keeps the whole of its window.
+      return i + 1 < deck.length ? a + (b - a) * (1 - CARD_HOP) : b
+    }
+
     const offs = deck.map((el, i) =>
       registerPerch({
         surface: () => el,
-        range: () => [sts[i].start, sts[i].end],
+        range: () => [sts[i].start, ridableTo(i)],
+        // Unclamped on purpose: a hop between two perches on one clock is timed
+        // by how far past 1 the one behind is against how far short of 0 the one
+        // ahead is, so both have to be free to say. `perchK` clamps it before
+        // anything is placed with it.
+        progress: () =>
+          (ballClock.y - sts[i].start) / Math.max(1, ridableTo(i) - sts[i].start),
+        clock: deckClock,
         // Each card carries the ball one step of the way across, so the deck
         // reads as one continuous walk rather than six rolls that each reset
         // to the left-hand edge.
         from: () => step(i),
         to: () => step(i + 1),
-        // A card sits 10px below the one it covers, so the hop between them is
-        // a step down rather than a fall, and the default crossing — sized for
-        // getting between sections — would hang the ball in the air over it.
+        // Only the last card's is consulted now — the steps between cards are
+        // anchor to anchor and take their scroll from CARD_HOP rather than from
+        // layout() — and there it is a floor under the sideways exit, which is
+        // sized from the distance to the frame edge and never comes near it.
         fall: 0.07,
+        // ...and a step down is all it may be. The card being stepped onto is
+        // still climbing towards its sticky offset when the hop starts, so aimed
+        // where it is at that moment the ball dived a hundred pixels under the
+        // deck and climbed back out as the target arrived — measured between the
+        // second and third cards, 123px down at 3px per px of scroll against a
+        // roll of 0.2. Aimed where the card *will* be, the same hop is the ten
+        // pixels it actually is. See `holdEntry` in useScrollBall.ts.
+        holdEntry: true,
         // The last card hands over to the experience chart, which is a whole
         // section away and starts at the left-hand edge again. Off the right
         // of the frame and back in at the left, rather than an arc across
@@ -498,29 +628,40 @@ onBeforeUnmount(() => {
            to stand at the far right facing left, which put him most of a rule
            away from the only point on it the ball ever reaches.
 
-           `left` is short of DECK_FROM by roughly the distance from his own
-           left edge to his boot, so it is the *foot* that lands on the handover
-           and not his hip. -->
+           `left` is short of DECK_FROM by the distance from his own left edge to
+           his boot, so it is the *foot* that lands on the handover and not his
+           hip — and it is computed from DECK_FROM rather than stated, because the
+           two are only the same number at one viewport width otherwise. It was
+           `left-[47%]`, which is where DECK_FROM lands on a 1224px rule and not
+           where it lands on any other: at the 1024px the ball exists from at all,
+           the handover point is at x=490 of the rule and 47% of it is 436, so the
+           ball came to rest 31px short of a boot swinging through thin air. See
+           `.work-player`. -->
       <div class="relative mb-20 md:mb-28">
         <span ref="railRef" class="hidden h-px w-full bg-hair md:block" aria-hidden="true" />
 
-        <div class="pointer-events-none absolute -bottom-1.5 left-[47%] hidden w-[var(--cameo)] lg:block">
-          <!-- Scrubbed over the hold, on the same range the ball's own perch is
-               anchored to — so his boot and the ball are two readings of one
-               number rather than two things trying to meet. -->
-          <ThePlayer
-            move="work"
-            :anchor="() => headBlockRef"
-            :start="HOLD_START"
-            :end="`+=${HOLD_SCROLL}`"
-          />
+        <div
+          class="work-player pointer-events-none absolute -bottom-1.5 hidden w-[var(--cameo)] lg:block"
+          :style="{ '--contact': DECK_FROM, '--boot': BOOT_AT, '--rail-inset': `${RAIL_INSET}px` }"
+        >
+          <!-- Handed the hold's progress on the ball's own clock, rather than
+               scrubbed against the same window separately — so his boot and the
+               ball are two readings of one number rather than two smoothings of
+               one scroll position, which is what they were. See `holdK`. -->
+          <ThePlayer move="work" :progress="holdK" />
         </div>
       </div>
     </div>
 
     <!-- The deck's runway, and it has to live out here rather than on the rule.
 
-         `lg:mt-[420px]` is exactly HOLD_SCROLL. The heading above is pinned
+         The margin is HOLD_SCROLL, bound from the constant rather than written
+         out again: the two are one number and the whole composition breaks
+         quietly if they drift, so there is no version of this that should be
+         typed twice. (It was `lg:mt-[420px]` beside a comment saying so, which
+         is how the pair survived the hold going to 620.)
+
+         The heading above is pinned
          without spacing for that distance, so the deck keeps moving while the
          heading does not — starting a hold's-worth lower is what makes it
          *arrive* at its normal spacing on the frame the pin releases, rather
@@ -534,7 +675,10 @@ onBeforeUnmount(() => {
 
          Only at `lg`, where the pin runs at all; below that it would be 420px
          of dead page. -->
-    <div class="mx-auto max-w-[1320px] px-6 md:px-12 md:pt-0 pt-3 lg:mt-[420px]">
+    <div
+      class="work-runway mx-auto max-w-[1320px] px-6 md:px-12 md:pt-0 pt-3"
+      :style="{ '--runway': `${HOLD_SCROLL}px` }"
+    >
       <!-- `swipe-rail` is bound rather than static: the shared rule for it in
            main.css runs to 1023px, and between 992 and 1023 this deck is a
            deck. Wearing the class there would hand it a scroll-snap flex row to
@@ -697,6 +841,33 @@ section {
 @media (min-width: 992px) and (max-width: 1279px) {
   section {
     --hero: max(180px, min(290px, calc(100vh - 2 * var(--band) - 120px)));
+  }
+}
+
+/* Where he stands, so that his boot is on the handover point rather than near
+   it.
+
+   `100%` is the rule's width, since that is what he is positioned inside. The
+   first two terms are the ball's resting place — the same expression the perch
+   resolves DECK_FROM through, inset and all — and the third steps back from it by
+   the distance from his own left edge to his boot. Every term is bound from the
+   constant it belongs to, because this is one point measured twice and the two
+   measurements have to agree at every width, not just at the one it was eyeballed
+   at. */
+.work-player {
+  left: calc(
+    var(--rail-inset) + (100% - 2 * var(--rail-inset)) * var(--contact) - var(--boot) *
+      var(--cameo)
+  );
+}
+
+/* The hold's runway — see the wrapper in the template. `lg` only, matching
+   BALL_QUERY: below it nothing is pinned and this would be a screen of dead
+   page. The value comes from HOLD_SCROLL through `--runway`, because a hold and
+   its runway are the same number. */
+@media (min-width: 1024px) {
+  .work-runway {
+    margin-top: var(--runway);
   }
 }
 

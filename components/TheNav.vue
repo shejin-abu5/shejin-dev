@@ -79,7 +79,7 @@ const { active } = useScrollSpy(links.map((link) => link.id))
         >
           <span class="h-1.5 w-1.5 rounded-full bg-green-300" aria-hidden="true" />
           <span class="font-data text-[11px] tracking-wide text-steel">
-            Open to work
+            Open to score
           </span>
         </div>
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { BALL_QUERY, ballEntry, ballPerches, type Perch } from '~/composables/useScrollBall'
+import { BALL_QUERY, ballClock, ballEntry, ballPerches, type Perch } from '~/composables/useScrollBall'
 
 // One ball for the whole page. It starts perched in the hero's headline, rides
 // it sideways, then falls, rolls and lands its way down through every section
@@ -22,7 +22,14 @@ import { BALL_QUERY, ballEntry, ballPerches, type Perch } from '~/composables/us
 // two viewports, an experience chart card a few hundred px), so no px figure
 // suited all of them and no fraction did either — hence the cap that used to
 // live here. In seconds a landing is just a landing, on every perch.
-const BOUNCE_TIME = 0.62
+//
+// 0.9 rather than the 0.62 this ran at. The shape is two hops under a linear
+// decay, so the figure is halved before it is anything a viewer can read as a
+// bounce: at 0.62 each hop was 0.31s for 18px of rise, which on the work deck —
+// where the ball lands six times, once per card — read as a tick rather than as
+// a ball settling. The deck is what makes it worth slowing: one landing at that
+// pace passes for an impact, six in a row is a stutter.
+const BOUNCE_TIME = 0.9
 const BOUNCE_PX = 18
 const SQUASH = 0.12
 
@@ -78,6 +85,15 @@ const FADE_PX = 190
 // ROLL is the cruise, and 0.75 is measured rather than chosen: it is what the
 // three plain rails were already doing on their own. It is the pace the page
 // reads at when nothing is going wrong.
+//
+// Lowering it does almost nothing on this page, which is worth knowing before
+// reaching for it as the way to slow the ball down. A roll asks for
+// `distance / ROLL_SPEED` and takes the longer of that and what its section
+// declared, and every rail here declares more than it needs — so `need` moves
+// and `pref` does not. Measured end to end at 0.6 against 0.75: the mean pace in
+// every section was unchanged to two decimal places, and the footer's got
+// slightly worse. What actually paces this page is the windows the sections
+// declare and the crossing floors below.
 const ROLL_SPEED = 0.75
 // A crossing may run a little quicker than a roll — the ball is airborne, and
 // too much hang time reads as float rather than as a hop. Only a little: these
@@ -89,6 +105,13 @@ const CROSS_SPEED = 0.9
 // has no horizontal distance to size itself from and still has to fall for
 // long enough to read as falling. A perch's own `fall` overrides it, which is
 // how a section says "the next hop is a short one" — see useScrollBall.ts.
+//
+// Raising it does as little as lowering ROLL_SPEED does, and for the same
+// reason: measured at 0.42 against 0.3, every section's mean pace came back
+// identical and the footer's got slightly worse. These floors are floors — the
+// crossings on this page are already getting more than them out of the spare
+// scroll in their runs. The knob that moves a section's pace is the window that
+// section declares.
 const MIN_CROSS_VH = 0.3
 
 // How much of its from→to a roll may be cut back to, when a stretch of page
@@ -655,14 +678,19 @@ onMounted(() => {
      * Whether a hop from perch `a` to perch `b` can be timed on a clock the
      * two of them share.
      *
-     * Only one kind of section hands the ball a clock — one that scrubs its
-     * own timeline — and where two such perches are adjacent they are two
-     * slices of that same timeline. Two different scrubbed sections could not
-     * be neighbours without a plain perch between them, so "both have a clock"
-     * is in practice "both have the same clock".
+     * Asked of the clock's identity rather than inferred from both perches
+     * having one. It used to be inferred, on the grounds that only a scrubbing
+     * section hands a clock over and two of those could not be neighbours
+     * without a plain perch in between — see `clock` in useScrollBall.ts for
+     * what that costs the moment a second kind of section does, which the work
+     * deck now is.
      */
     const sameClock = (a: number, b: number) =>
-      a >= 0 && b < sorted.length && !!sorted[a].progress && !!sorted[b].progress
+      a >= 0 &&
+      b < sorted.length &&
+      !!sorted[a].progress &&
+      !!sorted[b].progress &&
+      sorted[a].clock === sorted[b].clock
 
     /**
      * Whether the ball has finished with perch `idx`, and whether it has
@@ -933,7 +961,16 @@ onMounted(() => {
             // still in it. The cap cannot bind at the landing: a perch's window
             // opens when its surface is in frame, so by k=1 the true target is
             // above this line and the arc ends exactly on it.
-            const aim = Math.min(to.y, vh - ballR * 2)
+            //
+            // A short hop onto a surface that is still climbing gets the
+            // stronger answer instead: where that surface *will* be, which for
+            // one travelling with the page is recoverable the same way the
+            // origin is. The cap keeps a long fall on screen; this keeps a
+            // ten-pixel step from being aimed a hundred pixels under the deck.
+            // See `holdEntry` in useScrollBall.ts.
+            const aim = sorted[i].holdEntry
+              ? to.y - (1 - k) * span
+              : Math.min(to.y, vh - ballR * 2)
             // The height the surface was at when the ball left it, not the
             // height it is at now.
             //
@@ -1006,6 +1043,17 @@ onMounted(() => {
         }
       }
 
+      // TEMPORARY measurement hook — remove before committing.
+      ;(window as unknown as Record<string, unknown>).__ball = {
+        n: sorted.length,
+        riding,
+        ride: ride.slice(),
+        bounds: bounds.slice(),
+        from: sorted.map((p) => p.from()),
+        to: sorted.map((p) => p.to()),
+        w: widths.slice()
+      }
+
       // Rotation from horizontal displacement actually travelled, which is
       // what reads as rolling.
       //
@@ -1051,6 +1099,10 @@ onMounted(() => {
       const dt = Math.min(deltaMs / 1000, 0.05)
       clock += dt
       smoothed += (window.scrollY - smoothed) * (1 - Math.exp(-dt / FOLLOW_TAU))
+      // Published before apply(), so a section reading it back for its own
+      // `progress` this frame gets this frame's value rather than the last
+      // one's — see ballClock in useScrollBall.ts.
+      ballClock.y = smoothed
       apply()
     }
 

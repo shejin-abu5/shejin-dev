@@ -85,6 +85,7 @@ useHead({
       <ExperienceSection />
       <SkillsSection />
       <EduLangSection />
+      <PartnersSection />
     </main>
 
     <TheFooter />

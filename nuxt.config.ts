@@ -24,7 +24,13 @@ export default defineNuxtConfig({
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {
           rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap'
+          // Archivo carries one italic — 700, for the supplier band's label in
+          // PartnersSection.vue, and nothing else on the site asks for a slant.
+          // A real cut rather than letting the browser shear the upright one:
+          // faux italic on a grotesque flattens the round letters, and it is
+          // plain at that label's weight and tracking. One extra woff2, subset
+          // to latin by Google's own stylesheet, behind the same `display=swap`.
+          href: 'https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,500;0,700;0,900;1,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap'
         },
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'canonical', href: 'https://shejinabu.com/' }

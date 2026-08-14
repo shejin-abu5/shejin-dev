@@ -70,6 +70,22 @@ const props = withDefaults(
     /** ScrollTrigger window for a cameo, against `anchor`. */
     start?: string
     end?: string
+    /**
+     * How far through his move he is, 0–1 — supplied by the section instead of
+     * scrubbed off `anchor`/`start`/`end`.
+     *
+     * For the one case where the contact has to *coincide* with the ball rather
+     * than merely happen near it. A scrub is a smoothing of scroll and so is the
+     * ball's own clock, and two smoothings of one scroll position are two
+     * different numbers: at reading speed the projects strike and the ball
+     * rolling onto the boot sat a tenth of the hold apart, and the gap reverses
+     * sign when you scroll back up. Handed the same clock the ball is reading,
+     * the boot and the ball are two views of one number and cannot drift.
+     *
+     * Where this is set, `start`/`end` are unused — the section's own window is
+     * already what its clock is measured against.
+     */
+    progress?: () => number
   }>(),
   {
     variant: 'cameo',
@@ -203,6 +219,39 @@ const DROP_TIME = 1.25
 
 /** How much scroll the hero allows before the volley fires. */
 const VOLLEY_AT = 90
+
+/**
+ * The floor on how long the hero's run takes, in seconds — and the whole of why
+ * it is not a plain `scrub`.
+ *
+ * A scrub maps the run onto the scrollbar, which means a flick plays it at
+ * whatever speed the flick had. The pinned read is one screen of scroll and a
+ * trackpad covers that in about a fifth of a second: eight strides, a turn and
+ * the width of the frame, all inside a single blink. The move was there and
+ * nobody could see it happen.
+ *
+ * Raising the scrub number does not fix that, which is worth saying because it
+ * is the obvious first try. ScrollTrigger smooths a scrub with `expo.out`, and
+ * that ease spends four fifths of its catch-up in the first quarter of its
+ * duration — so the burst survives intact and only the tail behind it gets
+ * longer. Big enough to tame a flick, it also puts a visible lag on ordinary
+ * scrolling, which is the half that was never broken.
+ *
+ * Capping the playhead's *speed* separates the two cases cleanly. Below the cap
+ * he still tracks the scrollbar frame for frame; above it he simply runs at his
+ * own top pace and catches the page up afterwards. 1.5s across the frame is
+ * eight strides at a little over five a second — a sprint, which is what he is
+ * doing.
+ */
+const RUN_MIN_TIME = 1.5
+/**
+ * Time constant of the catch-up once the page is back within the cap's reach.
+ *
+ * Short, and deliberately the same value the page's own ball follows scroll
+ * with: this is here to take the step out of the last fraction of the follow,
+ * not to add lag of its own. The cap above is what does the slowing.
+ */
+const RUN_TAU = 0.12
 /**
  * How far each limb travels sideways as he turns to face away, in rig units.
  *
@@ -803,19 +852,10 @@ onMounted(() => {
       const travel = () =>
         Math.max(0, window.innerWidth - host.offsetWidth - host.offsetLeft * 2)
 
-      const run = gsap.timeline({
-        scrollTrigger: {
-          trigger: wrap,
-          start: 'top top',
-          // The pinned read's own end: a sticky frame unsticks when the
-          // spacer's foot meets its own, which is `spacer − frame`. Written out
-          // again rather than shared because HeroSection resolves it inside its
-          // own matchMedia scope.
-          end: () => `+=${Math.max(1, wrap.offsetHeight - frame.offsetHeight)}`,
-          scrub: 0.6,
-          invalidateOnRefresh: true
-        }
-      })
+      // Paused, and driven by hand at the foot of this block rather than by a
+      // scrub — see RUN_MIN_TIME for why the scroll position is a target here
+      // rather than the playhead itself.
+      const run = gsap.timeline({ paused: true })
 
       // Fractions of the pinned read. The run starts well after the volley's
       // own trigger at VOLLEY_AT so the two are not writing to the same joints
@@ -855,9 +895,9 @@ onMounted(() => {
 
       // Pad the timeline to exactly 1.
       //
-      // A scrub maps the *whole* scroll range onto the timeline's own duration,
-      // whatever that happens to be — so without this the positions above are
-      // fractions of 0.90 rather than of the read, everything is stretched by
+      // Progress is a fraction of the timeline's own duration, whatever that
+      // happens to be — so without this the positions above are fractions of
+      // 0.90 rather than of the read, everything is stretched by
       // 1/0.9, and the last thing scheduled runs off the end. The turn was the
       // casualty: written at 0.77 it did not begin until 86% of the pinned
       // scroll and did not finish inside it at all, so he simply never turned
@@ -865,8 +905,93 @@ onMounted(() => {
       // fraction of the read it says it is.
       run.to({}, { duration: 0.02 }, 0.98)
 
+      /**
+       * The playhead, and the scroll position it is chasing.
+       *
+       * `p` is what the timeline is rendered at; `st.progress` is where the
+       * scrollbar says it ought to be. Everything interesting happens in the
+       * gap between the two — he is allowed to fall behind the page and then
+       * make it up at his own speed, rather than being dragged through the run
+       * as fast as a wrist can move.
+       *
+       * Declared before the trigger below because that trigger refreshes as it
+       * is created, and its `onRefresh` reads this.
+       */
+      let p = 0
+
+      const st = ScrollTrigger.create({
+        trigger: wrap,
+        start: 'top top',
+        // The pinned read's own end: a sticky frame unsticks when the spacer's
+        // foot meets its own, which is `spacer − frame`. Written out again
+        // rather than shared because HeroSection resolves it inside its own
+        // matchMedia scope.
+        end: () => `+=${Math.max(1, wrap.offsetHeight - frame.offsetHeight)}`,
+        // What `invalidateOnRefresh` did while this was a scrub, by hand. The
+        // order is the whole of it: rewound first, so the run's `x` tween
+        // re-records its start from 0 rather than from wherever he had got to;
+        // then invalidated, so `travel` resolves against the new viewport; then
+        // put back where it was.
+        onRefreshInit: () => run.progress(0),
+        onRefresh: () => {
+          run.invalidate()
+          run.progress(p)
+        }
+      })
+
+      // The cap, as a fraction of the timeline per second. Measured over the
+      // run itself rather than over the whole timeline, so RUN_MIN_TIME means
+      // the seconds it says it does.
+      const rate = (TO - FROM) / RUN_MIN_TIME
+
+      // Whether the playhead has been put somewhere yet. A reload part-way down
+      // the page restores its scroll position before this mounts, so the first
+      // frame is a placement rather than a move — capped like any other it
+      // would have him sprint in from the left edge to catch up with a page
+      // that was never scrolled.
+      let placed = false
+
+      const drive = (_time: number, deltaMs: number) => {
+        const target = st.progress
+        if (!placed) {
+          placed = true
+          p = target
+          run.progress(p)
+          return
+        }
+        if (target === p) return
+
+        // Clamped for the same reason the ball's follow is: a backgrounded tab
+        // hands over one enormous delta on return, and a step taken from it
+        // would be exactly the teleport this exists to prevent.
+        const dt = Math.min(deltaMs / 1000, 0.05)
+
+        // Nothing is scheduled before FROM — he is stood still there, watching
+        // the volley go — so the playhead crosses that stretch at whatever
+        // speed it is asked to. Capped, a flick would spend most of its
+        // catch-up on a man standing still and he would set off a second after
+        // the page had already left.
+        if (p < FROM) p = Math.min(target, FROM)
+
+        const d = target - p
+        const cap = rate * dt
+        // Within the cap this is a plain exponential follow and he tracks the
+        // scrollbar; beyond it the clamp takes over and he runs at his own
+        // pace until the page comes back within reach. Snapped at the end so a
+        // follow that is asymptotic by construction still actually arrives.
+        p =
+          Math.abs(d) < 0.0005
+            ? target
+            : p + gsap.utils.clamp(-cap, cap, d * (1 - Math.exp(-dt / RUN_TAU)))
+
+        run.progress(p)
+      }
+
+      gsap.ticker.add(drive)
+
       return () => {
-        run.scrollTrigger?.kill()
+        gsap.ticker.remove(drive)
+        st.kill()
         run.kill()
         gsap.set([host, svg], { clearProps: 'transform' })
         root.x = 0
@@ -1025,15 +1150,27 @@ onMounted(() => {
         }
       }
 
-      const tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: anchor,
-          start: props.start,
-          end: props.end,
-          scrub: 0.6,
-          invalidateOnRefresh: true
-        }
-      })
+      // Driven by the section where it hands one over, scrubbed against its own
+      // window otherwise. A section that owns the moment — a pin the contact
+      // happens inside of, with the ball anchored to the same clock — is the
+      // only thing on the page that can answer "how far through this are we" in
+      // a way the ball will agree with; scrubbing him separately makes the boot
+      // and the ball two smoothings of one scroll position, which is the bug
+      // that comment in usePlayerPoses is about. See `progress`.
+      const driven = !!props.progress
+      const tl = gsap.timeline(
+        driven
+          ? { paused: true }
+          : {
+              scrollTrigger: {
+                trigger: anchor,
+                start: props.start,
+                end: props.end,
+                scrub: 0.6,
+                invalidateOnRefresh: true
+              }
+            }
+      )
 
       // Positions below are fractions of the scroll window, and only because
       // the timeline is padded to exactly 1 at the end. A scrub maps the whole
@@ -1054,12 +1191,40 @@ onMounted(() => {
       const hitDur = cam.hitDur ?? 0.09
       if (cam.hit) tl.add(poseTl(cam.hit, hitDur, 'power1.inOut', false), hitAt)
 
-      // Settles after the contact has finished, whenever that is.
+      // Settles after the contact has finished, whenever that is — and inside
+      // the window, which is the part this used to get wrong.
+      //
+      // Every position here is a fraction of the timeline's *duration*, so a
+      // settle that runs past 1 does not simply overhang the end: it stretches
+      // the total, and everything before it is divided by the larger number and
+      // fires early. Selected Work is where that showed. Its contact is late
+      // (hitAt 0.54 over a hitDur of 0.28, so the settle starts at 0.86), and a
+      // flat 0.24 settle on top of that made the timeline 1.10 long — so the
+      // swing ran from 0.49 to 0.745 of the hold instead of 0.54 to 0.82, and
+      // the boot swept through the ball's landing point at 0.64 of a window
+      // where the ball does not arrive until 0.71. That is the kick that fires
+      // before the ball reaches the foot: not a mistimed pose, a timeline that
+      // was 10% longer than the fractions in it claimed.
+      //
+      // Clipped rather than moved, because when the contact is this late the
+      // settle is the only leg with anything to give: the wind-up and the swing
+      // are the move, and what follows them is a return to standing.
       const settleAt = Math.max(0.78, hitAt + hitDur + 0.04)
-      tl.add(poseTl(cam.settle, 0.24, 'power2.inOut'), settleAt)
-      tl.to({}, { duration: 0.02 }, Math.max(0.98, settleAt + 0.2))
+      tl.add(poseTl(cam.settle, Math.min(0.24, 1 - settleAt), 'power2.inOut'), settleAt)
+      tl.to({}, { duration: 0.001 }, 0.999)
+
+      // Driven off the section's clock rather than the scrollbar. A ticker
+      // rather than a watcher: the value it reads is smoothed per frame, so the
+      // only sampling rate that cannot alias it is the frame.
+      let drive: gsap.TickerCallback | null = null
+      if (driven) {
+        drive = () => tl.progress(gsap.utils.clamp(0, 1, props.progress!()))
+        gsap.ticker.add(drive)
+        drive()
+      }
 
       return () => {
+        if (drive) gsap.ticker.remove(drive)
         tl.scrollTrigger?.kill()
         tl.kill()
       }
