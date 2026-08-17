@@ -11,11 +11,14 @@ import { useBallPerch } from '~/composables/useScrollBall'
   it is placed last, immediately before the footer, because that is where a
   colophon belongs: after the work, before the contact details.
 
-  Deliberately three and not twenty. The skills lattice above already shows the
+  Deliberately four and not twenty. The skills lattice above already shows the
   whole toolbox, at chip size, changing every 1.4s. Repeating it here at logo
   size would say nothing new. What this says instead is narrower and checkable:
   *this page*, the one being looked at, is a Nuxt app rendering Vue components
-  styled with Tailwind. See nuxt.config.ts — the module list is the citation.
+  styled with Tailwind and moved by GSAP. See nuxt.config.ts for the first three
+  — the module list is the citation — and plugins/gsap.client.ts for the fourth,
+  which is the only one of them the reader has already watched work: every
+  reveal, the pinned lattice and the ball rolling down the page are its doing.
 
   The band is the quietest thing on the site and is meant to be. It carries no
   heading at section scale, no copy, no rules and no card, because a supplier
@@ -23,15 +26,15 @@ import { useBallPerch } from '~/composables/useScrollBall'
 */
 
 /**
- * The three marks, by filename in assets/img/tools.
+ * The four marks, by filename in assets/img/tools.
  *
  * Braced glob rather than the whole directory: SkillsSection globs all twenty
- * because it draws all twenty, and this draws three. Same `?url` + `eager`
+ * because it draws all twenty, and this draws four. Same `?url` + `eager`
  * treatment, so Vite inlines them as data URIs at build time and the band
  * costs no requests. The path is relative for the reason given there — Vite
  * resolves glob patterns statically, and a relative literal needs no alias.
  */
-const MARK = import.meta.glob<string>('../assets/img/tools/{vue,nuxt,tailwindcss}.svg', {
+const MARK = import.meta.glob<string>('../assets/img/tools/{vue,nuxt,tailwindcss,gsap}.svg', {
   eager: true,
   query: '?url',
   import: 'default'
@@ -48,12 +51,29 @@ interface Partner {
    * marks are the artwork; the names are for anyone not reading the artwork.
    */
   name: string
+  /**
+   * True for a mark that is a filled badge rather than a transparent drawing.
+   *
+   * Only GSAP, and it is an optical correction rather than a category. The
+   * other three are strokes on nothing, so their stated height is mostly air;
+   * GSAP's is a solid rounded square that fills every pixel of its box, and at
+   * a matched height it reads as the biggest and heaviest thing in the row.
+   * See `.partner-mark--badge` for the number.
+   */
+  badge?: true
 }
 
+/*
+  Ordered as the page is built rather than by prominence: the framework, the
+  framework around it, the styles on top, and last the thing that moves all of
+  it. GSAP goes at the end because that is where it enters — nothing on this
+  page animates until the other three have already drawn it.
+*/
 const PARTNERS: Partner[] = [
   { file: 'vue', name: 'Vue.js' },
   { file: 'nuxt', name: 'Nuxt' },
-  { file: 'tailwindcss', name: 'Tailwind CSS' }
+  { file: 'tailwindcss', name: 'Tailwind CSS' },
+  { file: 'gsap', name: 'GSAP', badge: true }
 ]
 
 const markUrl = (file: string) => MARK[`../assets/img/tools/${file}.svg`]
@@ -148,7 +168,13 @@ onMounted(() => {
                  A real `alt`, unlike the skills lattice's marks: there the names
                  follow as a written-out list, and here the mark is the only
                  thing that names its partner at all. -->
-            <img class="partner-mark" :src="markUrl(partner.file)" :alt="partner.name" decoding="async">
+            <img
+              class="partner-mark"
+              :class="{ 'partner-mark--badge': partner.badge }"
+              :src="markUrl(partner.file)"
+              :alt="partner.name"
+              decoding="async"
+            >
           </li>
         </ul>
 
@@ -177,14 +203,13 @@ onMounted(() => {
 */
 .partner-label {
   font-family: theme('fontFamily.display');
-  font-style: italic;
   font-weight: 700;
-  font-size: 17px;
+  font-size: 18px;
   letter-spacing: 0.01em;
   /* On-palette rather than the reference's lighter warm grey. #6B6F76 clears
      4.5:1 on paper; the softer tone this is standing in for lands around 2.6:1,
      which is under AA for text this size — and this is text, not a rule. */
-  color: theme('colors.steel');
+  color: theme('colors.black');
 }
 
 .partner-board {
@@ -223,11 +248,12 @@ onMounted(() => {
 /*
   A fixed height and `object-contain`, not a width.
 
-  The three marks have nothing in common geometrically — Vue is a 256x221
-  triangle, Nuxt a 256x168 wedge, Tailwind a 54x33 pair of strokes — so sizing
-  them by width draws Tailwind at two thirds the presence of Vue. Height is the
-  dimension the eye reads a row of logos by, and `object-contain` keeps each
-  one's own proportions while the row still reads as one line.
+  The four marks have nothing in common geometrically — Vue is a 256x221
+  triangle, Nuxt a 256x168 wedge, Tailwind a 54x33 pair of strokes, GSAP a
+  256x256 square — so sizing them by width draws Tailwind at two thirds the
+  presence of Vue. Height is the dimension the eye reads a row of logos by, and
+  `object-contain` keeps each one's own proportions while the row still reads as
+  one line.
 */
 .partner-mark {
   height: 34px;
@@ -240,26 +266,56 @@ onMounted(() => {
     here would be the one thing on the band that reacts to being pointed at
     without being able to be clicked.
 
-    Grey is also what lets three marks drawn by three different people read as
-    one row. In colour the band is a Vue green, a Nuxt green and a Tailwind blue
-    at three different intensities, and the eye sorts them before it reads them;
-    stripped of hue they are just three shapes at the same size, which is what a
-    supplier strip is.
+    Grey is also what lets four marks drawn by four different people read as one
+    row. In colour the band is a Vue green, a Nuxt green, a Tailwind blue and a
+    GSAP green at four different intensities, and the eye sorts them before it
+    reads them; stripped of hue they are just four shapes at the same size, which
+    is what a supplier strip is.
 
     The `brightness` is not taste, it is the correction that makes the first
     filter survivable. `grayscale()` weights a colour by luminance, and these
-    three are bright: Nuxt's #00DC82 and Tailwind's #38bdf8 both resolve to about
+    marks are bright: Nuxt's #00DC82 and Tailwind's #38bdf8 both resolve to about
     #A6, which is 2.1:1 on paper — pale enough that the row read as an empty gap
     before the footer rather than as a band. 0.72 takes the pair to roughly #77,
     near 4.9:1, and leaves Vue — whose mark carries a #35495E face and was never
     the problem — dark without crushing its two tones into one shape.
+
+    GSAP came in after that number was settled and did not disturb it, which is
+    luck rather than design: its #0AE448 is the same kind of bright green as
+    Nuxt's and lands within a shade of the same grey, so the badge's fill sits at
+    the weight the other three's strokes do. Its lettering is #0B0B0B and stays
+    black through both filters — a badge is meant to have a dark side and a light
+    one, and here it still does.
   */
   filter: grayscale(1) brightness(0.72);
+}
+
+/*
+  The badge, set shorter than the marks beside it so it does not out-shout them.
+
+  A logo row is levelled by area, not by height, and the three drawings spend
+  most of their box on nothing — Vue's triangle is a bit over half its own
+  square, Tailwind's two strokes far less. GSAP's rounded square is the only one
+  that inks its whole box, so at a matched 46px it is roughly twice the mark on
+  the paper and the row develops a corner. 0.87 of the height is what put it back
+  in line by eye; the same correction a typesetter makes when a full-face capital
+  sits next to lowercase.
+
+  Height rather than `transform: scale()` because the flex row measures the box:
+  a scaled badge would keep its 46px slot and open a gap around itself, which
+  trades one visible unevenness for another.
+*/
+.partner-mark--badge {
+  height: 30px;
 }
 
 @media (min-width: 768px) {
   .partner-mark {
     height: 46px;
+  }
+
+  .partner-mark--badge {
+    height: 40px;
   }
 }
 

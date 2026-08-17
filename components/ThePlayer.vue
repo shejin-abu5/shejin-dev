@@ -56,6 +56,16 @@ const props = withDefaults(
      */
     aimAt?: () => HTMLElement | null | undefined
     /**
+     * How much scroll the hero allows before the volley fires.
+     *
+     * A getter, and owned by the section rather than by this file, because on
+     * the phone it has to land inside the stretch of the read where the headline
+     * is deliberately holding still — and that hold is HeroSection's. A number
+     * here and a fraction there is two descriptions of one moment, and they
+     * drift apart the first time either is touched. See HOLD_FROM there.
+     */
+    volleyAt?: () => number
+    /**
      * What a cameo scrubs against. Defaults to the wrapper he is placed by,
      * which is the right answer when the move is "he reacts as he comes into
      * view".
@@ -217,8 +227,45 @@ const JUGGLE_APEX = { x: 172, y: 136 }
 const DROP_FROM = -380
 const DROP_TIME = 1.25
 
-/** How much scroll the hero allows before the volley fires. */
+/** How much scroll the hero allows before the volley fires, absent a `volleyAt`. */
 const VOLLEY_AT = 90
+
+/**
+ * How much of its own speed the hero's clock keeps on a phone.
+ *
+ * The juggle, the drop-in and the volley all run on a clock rather than the
+ * scrollbar, and every one of those durations was chosen against a desktop
+ * frame — a figure a third of a screen tall, watched from a chair. The same
+ * timings on a phone are a strike that is over before the eye has found the
+ * boot: the whole volley is 0.7s of animation, on a screen where the reader is
+ * also moving the page under it with a thumb.
+ *
+ * Applied as a `timeScale` on the three hero timelines rather than by editing
+ * JUGGLE_PERIOD, DROP_TIME and the flight duration, which desktop shares. One
+ * number, in one place, and desktop stays at 1 by not being touched.
+ *
+ * 0.82 rather than the 0.62 this was first set to. At 0.62 the juggle was a
+ * touch every 1.2s and the volley took a second and a quarter, which stopped
+ * reading as deliberate and started reading as underpowered — the figure looked
+ * like he was moving through water. Slowing a motion to make it legible works
+ * until it crosses the speed the motion is *of*; a keepy-up has a real tempo and
+ * the eye knows it. Slightly under time reads as considered, well under it reads
+ * as broken.
+ */
+const PHONE_SPEED = 0.82
+
+/**
+ * Where the parked ball starts fading out, and over how much of the frame — both
+ * in px from the left edge, and both only used below 1024.
+ *
+ * The ball rides the mark off the side of the screen rather than falling to
+ * anything, because on a phone there is nothing below it to fall to. The frame
+ * is `overflow-hidden` and would clip it cleanly enough, but a ball that is half
+ * a ball for one frame and then gone reads as a dropped frame; fading it over
+ * the last stretch of its travel reads as leaving.
+ */
+const PARK_FADE_AT = 26
+const PARK_FADE_BAND = 96
 
 /**
  * The floor on how long the hero's run takes, in seconds — and the whole of why
@@ -244,6 +291,20 @@ const VOLLEY_AT = 90
  * doing.
  */
 const RUN_MIN_TIME = 1.5
+/**
+ * The same floor, for the phone — where the only thing in that timeline is the
+ * turn, so this is how long a turn takes at its quickest.
+ *
+ * It cannot be RUN_MIN_TIME, because that number is spent on eight strides and
+ * a turn across a whole frame while this is spent on one body opening out and
+ * closing back into profile. Handed 1.5s the turn would take three times as
+ * long as the desktop's does and read as a man thinking about it.
+ *
+ * 0.9 puts it a shade over the ~0.79s the desktop turn gets out of the same cap
+ * — the extra is the same allowance PHONE_SPEED makes, for the same reason: a
+ * figure a fifth of a screen tall, on a page the reader is moving with a thumb.
+ */
+const PHONE_TURN_TIME = 0.9
 /**
  * Time constant of the catch-up once the page is back within the cap's reach.
  *
@@ -569,18 +630,49 @@ onMounted(() => {
   // scrub against — and unlike the orb this replaces, it is attached to
   // something that is visibly acting on it, so it reads as a ball being played
   // rather than as a spinner.
-  if (ownsBall.value && spinRef.value) {
-    gsap.to(spinRef.value, {
-      rotation: 360,
-      duration: 1.6,
-      ease: 'none',
-      repeat: -1,
-      svgOrigin: '0 0'
-    })
-  }
+  // Kept as a handle rather than fired and forgotten, because below 1024 the
+  // ball stops being juggled and starts being carried by the headline — at
+  // which point its spin is no longer its own. See the park ticker.
+  const spinTween =
+    ownsBall.value && spinRef.value
+      ? gsap.to(spinRef.value, {
+          rotation: 360,
+          duration: 1.6,
+          ease: 'none',
+          repeat: -1,
+          svgOrigin: '0 0'
+        })
+      : null
+  /** Degrees per second the loop above turns at `timeScale` 1. */
+  const SPIN_RATE = 360 / 1.6
 
   if (props.variant === 'hero') {
-    mm.add('all', () => {
+    /**
+     * Two things vary with width here, at two different breakpoints, and neither
+     * line is arbitrary.
+     *
+     * `noReceiver` is the exact complement of BALL_QUERY in useScrollBall: below
+     * 1024 the page's own ball never enters play, so the volley's handover has
+     * nothing to hand to. That is not a phone concern, it is a "there is no
+     * scroll ball" concern, and it is true of tablets too.
+     *
+     * `phone` is the composition — how fast the clock runs — and it sits on the
+     * `md` line this hero uses everywhere else.
+     *
+     * `any: 'all'` is what makes the set exhaustive. A gsap.matchMedia given a
+     * conditions object runs only while at least one of them matches, so a pair
+     * of max-width arms would leave the desktop with no juggle, no volley and no
+     * ball at all.
+     */
+    const HERO_ARMS = {
+      noReceiver: '(max-width: 1023.98px)',
+      phone: '(max-width: 767.98px)',
+      any: 'all'
+    }
+
+    mm.add(HERO_ARMS, (ctx) => {
+      const noReceiver = !!ctx.conditions?.noReceiver
+      const phone = !!ctx.conditions?.phone
       const ball = ballRef.value
       if (!ball) return
 
@@ -675,7 +767,39 @@ onMounted(() => {
        * exactly where the loop expects to start.
        */
       const contact = POSES.juggleUp.ball!
-      gsap.set(ball, { x: contact.x, y: DROP_FROM, opacity: 1 })
+
+      /**
+       * Where the ball starts its fall, in rig units — resolved against the
+       * screen rather than taken as read.
+       *
+       * DROP_FROM is a constant in the rig's own units, and the note on it says
+       * -380 "puts the ball clear of the hero frame entirely at any size it is
+       * drawn at". That is true of the sizes it was written for and false in
+       * general, because how far -380 units reaches on screen depends entirely
+       * on how wide the figure is being drawn: the SVG scales, so a unit is
+       * 1.43px behind a 342px desktop player and 1.07px behind a 257px phone
+       * one. Measured at 390×844, -380 units put the ball's start at client
+       * y=+72 — a third of the way down the screen, inside an overflow-hidden
+       * frame — so on a phone it never fell *in* from anywhere. It appeared out
+       * of clear space above the headline and dropped from there, which is the
+       * one thing the drop exists to avoid.
+       *
+       * Solving for the screen instead: a point at user-space `u` renders at
+       * `box.top + u * box.height / 340`, so the `u` that puts the ball's whole
+       * body above the viewport is the expression below. `Math.min` keeps
+       * whichever is higher, which means desktop — where -380 is already well
+       * clear at -126px — is left on exactly the constant it has always used.
+       */
+      const dropFrom = () => {
+        const box = svg.getBoundingClientRect()
+        if (!box.height) return DROP_FROM
+        const perUnit = box.height / 340
+        // Clear of the top edge by a ball's diameter, so it is off-frame rather
+        // than merely touching it.
+        return Math.min(DROP_FROM, -RIG.ballR * 2 - box.top / perUnit)
+      }
+
+      gsap.set(ball, { x: contact.x, y: dropFrom(), opacity: 1 })
 
       const intro = gsap.timeline({
         onComplete: () => juggle.play()
@@ -764,6 +888,42 @@ onMounted(() => {
 
       volley
         .add(poseTl('volley', 0.24, 'power3.out', false), 0)
+        // The strike's own squash — and the only thing that hands the ball back
+        // its shape.
+        //
+        // Every other contact on this figure deforms the ball and releases it on
+        // the next beat of the loop it belongs to. The volley had neither, and
+        // the missing release is a bug rather than a matter of taste: `onStart`
+        // pauses the juggle, which freezes the ball at whatever scale that loop
+        // had reached, and from then on nothing writes to it again — the flight
+        // below sets x/y, and the park ticker sets x/y and opacity. Struck during
+        // the fifth of a cycle spanning the squash at `JUGGLE_PERIOD - 0.08` and
+        // the release at 0, the ball arrives on the mark at 1.1 × 0.88 and stays
+        // there for the whole of the hero. Below 1024 that is what the reader
+        // sees: a permanently oval ball parked on the headline. Scrolling back up
+        // is what exposes it, because the reverse restarts the juggle and the
+        // next strike freezes it at a fresh, arbitrary phase.
+        //
+        // It closes the same hole on the drop-in, whose last tween also ends
+        // squashed: `onStart` force-completes that intro for anyone who scrolls
+        // within the first second and a quarter, and the juggle it would
+        // otherwise have handed over to is paused by the very next line.
+        //
+        // `fromTo` rather than a plain `to`, for the reason the loop's own
+        // release is one — the inherited scale is whatever the pause left, so
+        // stating both ends is what makes the strike look the same every time,
+        // including on the replays after a scroll back up.
+        .fromTo(
+          ball,
+          { scaleY: 1, scaleX: 1 },
+          { scaleY: 0.88, scaleX: 1.1, duration: 0.06, ease: 'power2.in' },
+          0
+        )
+        // Released as it leaves the boot — the ball is round in flight, and this
+        // is what it has to be for it to be round when it lands. Over rather more
+        // than the squash took, because a ball recovers its shape more slowly
+        // than a boot takes it away.
+        .to(ball, { scaleY: 1, scaleX: 1, duration: 0.18, ease: 'power2.out' }, 0.06)
         .to(
           flight,
           {
@@ -794,25 +954,146 @@ onMounted(() => {
           },
           0.06
         )
-        // The swap, at the moment of arrival and over the same tenth of a
-        // second, so the two balls are never both visible and never both gone.
-        .to(ball, { opacity: 0, duration: 0.12, ease: 'none' }, 0.64)
-        .to(ballEntry, { v: 1, duration: 0.16, ease: 'power2.out' }, 0.62)
-        // And he settles back to standing, watching it go.
-        .add(poseTl('stand', 0.5, 'power2.out', false), 0.42)
+      // The swap, at the moment of arrival and over the same tenth of a second,
+      // so the two balls are never both visible and never both gone.
+      //
+      // Skipped entirely where there is no second ball to swap to. Below 1024
+      // this used to run anyway: the strike landed on the mark, the ball faded
+      // out on schedule, and nothing faded in behind it — so on every phone and
+      // tablet the volley ended with the ball simply ceasing to exist, an inch
+      // from the headline it had just been kicked onto. The handover was correct
+      // and the receiver was gated off.
+      if (!noReceiver) {
+        volley
+          .to(ball, { opacity: 0, duration: 0.12, ease: 'none' }, 0.64)
+          .to(ballEntry, { v: 1, duration: 0.16, ease: 'power2.out' }, 0.62)
+      }
+
+      // And he settles back to standing, watching it go.
+      volley.add(poseTl('stand', 0.5, 'power2.out', false), 0.42)
+
+      // The phone's clock, slowed as a whole. After the timelines are built, so
+      // every duration inside them is scaled by the one number — and before the
+      // first tick, so nothing has played at full speed.
+      if (phone) {
+        intro.timeScale(PHONE_SPEED)
+        juggle.timeScale(PHONE_SPEED)
+        volley.timeScale(PHONE_SPEED)
+      }
+
+      /**
+       * Below 1024, the ball stays.
+       *
+       * With no journey to join it keeps riding the thing it was kicked onto:
+       * this pins it to the mark's live position every frame, which is the same
+       * `aimPoint` arithmetic the flight above already steers by, so the ball
+       * cannot arrive in one coordinate system and settle in another.
+       *
+       * It also stops being a juggled ball at that moment and starts being a
+       * carried one, so its spin changes hands. The constant loop is right while
+       * he is keeping it up and wrong the instant it comes to rest on a heading:
+       * a sphere turning on a timer is the exact thing this site took the phone's
+       * orb out for. Parked, the rotation is driven by the mark's own travel —
+       * it rolls because the headline is moving underneath it, and when the page
+       * is still, so is it.
+       */
+      let parkLastX: number | null = null
+      let park: gsap.TickerCallback | null = null
+
+      if (noReceiver) {
+        park = (_t: number, deltaMs: number) => {
+          const target = props.aimAt?.()
+          const box = svg.getBoundingClientRect()
+          if (!target || !box.width) return
+
+          // Only once the strike has actually landed. Before that the flight
+          // owns the ball, and two writers on one transform is a fight whose
+          // winner depends on ticker order.
+          if (volley.progress() < 1) {
+            parkLastX = null
+            if (spinTween) spinTween.timeScale(1)
+            return
+          }
+
+          const m = target.getBoundingClientRect()
+          const cx = m.left + m.width / 2
+          const cy = m.top + m.height / 2
+
+          /**
+           * The mark's position in the *ball's own* coordinate space, taken off
+           * the live matrix rather than worked out from the SVG's box.
+           *
+           * `aimPoint` above is the wrong tool for this and it is worth saying
+           * why, because it is the obvious one to reach for. It measures the
+           * SVG's rect and scales into viewBox units, which is correct for a
+           * ball being *thrown* — the flight is over in half a second and the rig
+           * is standing still throughout. A parked ball is not: it sits there for
+           * the length of the hero, and `.p-ball` is drawn inside `.p-rig`, so it
+           * silently inherits every transform the rig picks up.
+           *
+           * On desktop widths the rig picks up a lot. The run cycle bobs the root
+           * 3 to 9 units per stride and the turn mirrors the whole body about the
+           * hip — so the ball resting on the headline bobbed with his stride
+           * (measured: 10px of drift at 900×800) and would have jumped the width
+           * of the figure when he turned.
+           *
+           * Inverting the rig's screen matrix answers all of it at once, because
+           * it is the same matrix causing it. Translation, the bob, the mirror
+           * and any future transform come out in the wash — the ball is placed
+           * where the mark is, in whatever space the rig currently occupies.
+           */
+          const ctm = rig.getScreenCTM()
+          if (!ctm) return
+          const local = new DOMPoint(cx, cy).matrixTransform(ctm.inverse())
+
+          gsap.set(ball, {
+            x: local.x,
+            y: local.y,
+            // Off the left edge with the headline it is sitting on.
+            opacity: gsap.utils.clamp(0, 1, (cx - PARK_FADE_AT) / PARK_FADE_BAND)
+          })
+
+          // Rolling, at the rate the contact patch demands rather than at a
+          // rate that merely looks busy: the ball's radius on screen is
+          // RIG.ballR scaled by however wide the SVG is being drawn, and a
+          // circle covering `dx` px turns `dx / r` radians doing it. Negative
+          // timeScale runs the loop backwards, which is what a ball travelling
+          // left does.
+          const dt = Math.min(deltaMs / 1000, 0.05)
+          const rPx = RIG.ballR * (box.width / 240)
+          if (parkLastX !== null && rPx > 0 && dt > 0 && spinTween) {
+            const degPerSec = (((cx - parkLastX) / dt / rPx) * 180) / Math.PI
+            spinTween.timeScale(gsap.utils.clamp(-8, 8, degPerSec / SPIN_RATE))
+          }
+          parkLastX = cx
+        }
+
+        gsap.ticker.add(park)
+      }
 
       // Fired off scroll rather than played on a delay: the juggle should carry
       // on for as long as somebody is looking at the top of the page, and end
       // the moment they decide to move.
+      // Resolved per refresh rather than captured, because on the phone it is a
+      // fraction of a pinned read whose height is a fraction of the viewport's —
+      // a rotation has to re-resolve it or the strike fires at the scroll
+      // position the old viewport implied.
+      const volleyAt = () => props.volleyAt?.() ?? VOLLEY_AT
+
       const st = ScrollTrigger.create({
         trigger: document.documentElement,
-        start: VOLLEY_AT,
-        end: VOLLEY_AT + 1,
+        start: volleyAt,
+        end: () => volleyAt() + 1,
         onEnter: () => volley.play(),
         onLeaveBack: () => volley.reverse()
       })
 
       return () => {
+        if (park) gsap.ticker.remove(park)
+        // Handed back to its own clock, so a resize across 1024 does not leave
+        // the desktop's ball frozen at whatever timeScale the phone's headline
+        // last asked for.
+        if (spinTween) spinTween.timeScale(1)
         st.kill()
         volley.kill()
         intro.kill()
@@ -822,24 +1103,33 @@ onMounted(() => {
     })
 
     /**
-     * After the volley: he chases the ball across the frame and turns to watch
-     * it go.
+     * After the volley: he chases the ball across the frame — on desktop — and
+     * turns to watch it go, at every width.
      *
      * Scrubbed against the hero's own pinned read — the same window the
-     * headline slides over and the same one the ball rides it for — so the run
-     * is paced by the reader rather than by a clock. That is the right choice
-     * here and the wrong one for the juggle above, and the difference is what
-     * each is answering to: a keepy-up is something he does while you are
-     * looking at the page, a chase is something he does *because* the ball
-     * left, and the ball leaves on scroll.
+     * headline slides over and the same one the ball rides it for — so both are
+     * paced by the reader rather than by a clock. That is the right choice here
+     * and the wrong one for the juggle above, and the difference is what each is
+     * answering to: a keepy-up is something he does while you are looking at the
+     * page, a chase is something he does *because* the ball left, and the ball
+     * leaves on scroll.
      *
-     * Desktop only. Not for want of room in the timeline but for want of room
-     * on the floor: a phone is 390px wide and he is 215 of them, so the whole
-     * run would be a shuffle of a body-width. It is also the width at which
-     * `.hero-player` stops centring itself with a transform — which is the
-     * property this tweens, and the two cannot both have it.
+     * The *chase* is desktop only, and not for want of room in the timeline but
+     * for want of room on the floor: a phone is 390px wide and he is 215 of
+     * them, so the whole run would be a shuffle of a body-width. It is also the
+     * width at which `.hero-player` stops centring itself with a transform —
+     * which is the property the run tweens, and the two cannot both have it.
+     *
+     * The *turn* is not, and used to be gated behind the same line only because
+     * it was written as the end of the run. Nothing about it needs the floor:
+     * it moves no layout property, it happens on the spot, and the reason for
+     * it — the ball has gone and he is watching it go — is as true on a phone,
+     * where the ball rides the headline off the left edge, as it is on a desktop
+     * where it drops into the page. So this block now runs at every width and
+     * `phone` picks which half of it is scheduled.
      */
-    mm.add('(min-width: 768px)', () => {
+    mm.add({ phone: '(max-width: 767.98px)', any: 'all' }, (ctx) => {
+      const phone = !!ctx.conditions?.phone
       const wrap = svg.closest<HTMLElement>('.hero-scroll')
       const frame = wrap?.querySelector<HTMLElement>('.hero-frame')
       const host = svg.parentElement
@@ -855,6 +1145,9 @@ onMounted(() => {
       // Paused, and driven by hand at the foot of this block rather than by a
       // scrub — see RUN_MIN_TIME for why the scroll position is a target here
       // rather than the playhead itself.
+      //
+      // Named for what it holds on desktop. On the phone the run is skipped and
+      // the turn is the whole of it.
       const run = gsap.timeline({ paused: true })
 
       // Fractions of the pinned read. The run starts well after the volley's
@@ -866,22 +1159,54 @@ onMounted(() => {
       const STRIDES = 8
       const step = (TO - FROM) / STRIDES
 
-      run.to(host, { x: travel, ease: 'none', duration: TO - FROM }, FROM)
+      if (!phone) {
+        run.to(host, { x: travel, ease: 'none', duration: TO - FROM }, FROM)
 
-      // The stride cycle. Alternating contact poses rather than one tween: a
-      // run is a loop, and the number of strides is what makes the distance
-      // read as covered rather than slid.
-      for (let i = 0; i < STRIDES; i++) {
-        run.add(poseTl(i % 2 ? 'runB' : 'runA', step, 'sine.inOut', false), FROM + i * step)
+        // The stride cycle. Alternating contact poses rather than one tween: a
+        // run is a loop, and the number of strides is what makes the distance
+        // read as covered rather than slid.
+        for (let i = 0; i < STRIDES; i++) {
+          run.add(poseTl(i % 2 ? 'runB' : 'runA', step, 'sine.inOut', false), FROM + i * step)
+        }
       }
+
+      /**
+       * Where the turn goes, and what it is placed against at each width.
+       *
+       * On desktop it is simply where the run pulls up: he stops, and a body
+       * that stops moving is a body free to turn round.
+       *
+       * The phone has no run to end, so it is placed against the ball instead —
+       * which is the thing the turn is *about* at both widths. Below 1024 the
+       * ball is never handed to the page; it stays stuck to the mark and rides
+       * it off the left edge of the frame, fading over PARK_FADE_BAND as it
+       * goes. The mark's travel is what sets when that happens, and the mark is
+       * moving for the whole of the read's last stretch — so the turn is put
+       * early enough in that stretch to be opening out while the ball is still
+       * on screen, rather than closing a beat after the frame has emptied. A man
+       * turning to watch something that has already gone is a man turning round.
+       *
+       * Not the volley's own trigger, which is the other obvious anchor and is
+       * far too early: the strike lands at 0.28 of the read and the ball then
+       * spends most of the remainder crossing the frame. He would turn his back
+       * on it and stand there while it left.
+       */
+      const TURN_AT = phone ? 0.62 : TO
+      /** How much of the read the three poses below occupy, from TURN_AT. */
+      const TURN_SPAN = 0.28
 
       // Pulls up, opens out to face away, closes back into profile. Sequential
       // rather than overlapping: these all tween the same joint numbers, and
       // two tweens writing one property in the same frame is a fight whose
       // winner depends on render order.
-      run.add(poseTl('stand', 0.06, 'power2.out', false), TO)
-      run.add(poseTl('backView', 0.1, 'sine.inOut', false), TO + 0.06)
-      run.add(poseTl('stand', 0.12, 'sine.inOut', false), TO + 0.16)
+      //
+      // The first of the three is a no-op on the phone — the volley has already
+      // settled him on `stand` and nothing has moved him since — and it is kept
+      // anyway, because scrubbing back up through the turn needs a pose at this
+      // end of it to return to.
+      run.add(poseTl('stand', 0.06, 'power2.out', false), TURN_AT)
+      run.add(poseTl('backView', 0.1, 'sine.inOut', false), TURN_AT + 0.06)
+      run.add(poseTl('stand', 0.12, 'sine.inOut', false), TURN_AT + 0.16)
 
       // And the turn itself, which owns the spread, the widening and the
       // facing. `turn` is the only thing here no pose writes to, so it can
@@ -891,7 +1216,11 @@ onMounted(() => {
       // Timed so its halfway point lands exactly where `backView` completes. It
       // has to: that is the frame the facing flips on, and it is only invisible
       // because the pose standing there is its own mirror image.
-      run.to(root, { turn: 1, duration: 0.22, ease: 'sine.inOut', onUpdate: applyRig }, TO + 0.05)
+      run.to(
+        root,
+        { turn: 1, duration: 0.22, ease: 'sine.inOut', onUpdate: applyRig },
+        TURN_AT + 0.05
+      )
 
       // Pad the timeline to exactly 1.
       //
@@ -940,9 +1269,14 @@ onMounted(() => {
       })
 
       // The cap, as a fraction of the timeline per second. Measured over the
-      // run itself rather than over the whole timeline, so RUN_MIN_TIME means
-      // the seconds it says it does.
-      const rate = (TO - FROM) / RUN_MIN_TIME
+      // stretch that actually moves rather than over the whole timeline, so the
+      // minimum-time constants mean the seconds they say they do — the run on
+      // desktop, and on the phone the turn, which is all there is.
+      const rate = phone ? TURN_SPAN / PHONE_TURN_TIME : (TO - FROM) / RUN_MIN_TIME
+
+      // Where that stretch starts, which is also how far the playhead is
+      // allowed to skip for free. See the note in `drive`.
+      const head = phone ? TURN_AT : FROM
 
       // Whether the playhead has been put somewhere yet. A reload part-way down
       // the page restores its scroll position before this mounts, so the first
@@ -966,12 +1300,13 @@ onMounted(() => {
         // would be exactly the teleport this exists to prevent.
         const dt = Math.min(deltaMs / 1000, 0.05)
 
-        // Nothing is scheduled before FROM — he is stood still there, watching
-        // the volley go — so the playhead crosses that stretch at whatever
-        // speed it is asked to. Capped, a flick would spend most of its
-        // catch-up on a man standing still and he would set off a second after
-        // the page had already left.
-        if (p < FROM) p = Math.min(target, FROM)
+        // Nothing is scheduled before `head` — he is stood still there,
+        // watching the volley go — so the playhead crosses that stretch at
+        // whatever speed it is asked to. Capped, a flick would spend most of
+        // its catch-up on a man standing still and he would set off a second
+        // after the page had already left. Longer on the phone, where that dead
+        // stretch is everything up to the turn.
+        if (p < head) p = Math.min(target, head)
 
         const d = target - p
         const cap = rate * dt
@@ -993,7 +1328,10 @@ onMounted(() => {
         gsap.ticker.remove(drive)
         st.kill()
         run.kill()
-        gsap.set([host, svg], { clearProps: 'transform' })
+        // The host only where the run has actually written to it. On the phone
+        // its transform is the stylesheet's own `translateX(-50%)` and no tween
+        // here has ever touched it, so there is nothing of ours to take off.
+        gsap.set(phone ? [svg] : [host, svg], { clearProps: 'transform' })
         root.x = 0
         root.y = 0
         root.rot = 0
@@ -1037,6 +1375,49 @@ onMounted(() => {
       const anchor = props.anchor?.() ?? svg.parentElement
       const cam = CAMEOS[props.move ?? 'work']
       if (!anchor || !cam) return
+
+      /**
+       * A cameo that is waiting rather than playing: he stands and taps a foot.
+       *
+       * On a clock for the same reason the keepy-up below is — waiting is
+       * something he does while you are looking at the page, not something the
+       * page does to him — and it is the only cameo with no ball in it at all.
+       * The footer's ball is perched on the rule beside him and stays there, so
+       * there is nothing arriving to time against and nothing for a scrub to
+       * scrub. His window props go unused here; the footer no longer passes any.
+       *
+       * Three tweens rather than the loop's two, and the third one is the whole
+       * move: the pause with the foot down. Fold it into the drop instead and
+       * the ease has to stretch over four times its own length, which is a foot
+       * sinking rather than landing.
+       */
+      if (cam.tap && cam.hit) {
+        const T = cam.period ?? 0.9
+        const rise = cam.rise ?? 0.26
+        const fall = cam.fall ?? 0.12
+
+        // Opened on the pose the cycle ends on, exactly as the loop below is
+        // and for the same reason: a tween records its start values the first
+        // time it renders and replays from those on every repeat, so a rig left
+        // standing makes the first half of every tap a tween out of `stand`.
+        poseTl(cam.enter, 0, 'none', false).progress(1)
+
+        const idle = gsap.timeline({ repeat: -1 })
+        idle
+          // Up quickly and settling at the top; down accelerating into the
+          // floor. Swapping either ease is the difference between a tap and a
+          // foot being waved about.
+          .add(poseTl(cam.hit, rise, 'power2.out', false), 0)
+          .add(poseTl(cam.enter, fall, 'power2.in', false), rise)
+          // The beat between taps, as padding on the timeline rather than as a
+          // longer `fall`. An empty tween is the only way to hold a repeating
+          // timeline still: `repeat` restarts at the timeline's own duration,
+          // so without something occupying the gap the next tap begins the
+          // frame the last one lands.
+          .to({}, { duration: Math.max(0.001, T - rise - fall) }, rise + fall)
+
+        return () => idle.kill()
+      }
 
       /**
        * A cameo that keeps the ball up, rather than reacting to it going past.

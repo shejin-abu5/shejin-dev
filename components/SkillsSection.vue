@@ -51,13 +51,12 @@ const LABEL: Record<string, string> = {
   gsap: 'GSAP',
   vite: 'Vite',
   pinia: 'Pinia',
-  nodejs: 'Node.js',
   git: 'Git',
   github: 'GitHub',
   figma: 'Figma',
   postman: 'Postman',
   claude: 'Claude',
-  cursor: 'Cursor',
+  codex: 'Codex',
   docker: 'Docker'
 }
 
@@ -109,7 +108,7 @@ const CELLS: Cell[] = [
   { row: 3, col: 2, pool: ['pinia', 'nodejs'] },
   { row: 3, col: 4, pool: ['git', 'github'] },
   { row: 4, col: 1, pool: ['figma', 'postman'] },
-  { row: 4, col: 3, pool: ['claude', 'cursor', 'docker'] }
+  { row: 4, col: 3, pool: ['claude', 'codex', 'docker'] }
 ]
 
 /** Flat, alphabetised, for the visually-hidden list that carries the real content. */
@@ -425,11 +424,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section id="skills" ref="sectionRef" class="py-12 md:py-[120px]">
+  <!-- `overflow-x-clip` is load-bearing on a phone. The lattice's wash
+       (`.lattice::before`) is `inset: -20%` of a box that has already hit its
+       56px tile floor, so at 390px it reaches ~12px past the right edge of the
+       viewport and the document picks up a horizontal scroll with nothing in
+       it — worse the narrower the screen gets. The spill is what stops the wash
+       ending on a hard edge, so it is clipped at the section rather than shrunk.
+
+       `clip`, not `hidden`: `hidden` would make this a scroll container and
+       compute the other axis to `auto`, which would cut the same wash off flat
+       along the section's top and bottom edges. -->
+  <section id="skills" ref="sectionRef" class="overflow-x-clip py-12 md:py-[120px]">
     <div class="mx-auto max-w-[1240px] px-5 md:px-8">
       <div class="skills-split">
         <div class="reveal">
-          <span class="mb-3.5 block font-data text-[13px] tracking-wide text-accent-text">03 — Stack</span>
+          <span class="mb-3.5 block font-data text-[13px] tracking-wide md:text-accent-text text-steel/60">03 — Stack</span>
           <h2 class="font-display text-[clamp(30px,4.5vw,58px)] font-black uppercase leading-none tracking-tight">
             Skills
           </h2>

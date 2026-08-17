@@ -30,7 +30,7 @@ interface ExperienceItem {
 const items: ExperienceItem[] = [
   {
     years: 'Mar 2014 — Jul 2016',
-    period: '2014 — 2016',
+    period: '2014',
     role: 'UI Developer',
     company: 'GL Infotech, Thrissur, Kerala, India',
     org: 'GL Infotech',
@@ -56,7 +56,7 @@ const items: ExperienceItem[] = [
   },
   {
     years: 'Mar 2017 — Jun 2020',
-    period: '2017 — 2020',
+    period: '2017',
     role: 'Frontend Developer',
     company: 'Golden Star Media Production & Event Management, Dubai, UAE',
     org: 'Golden Star Media',
@@ -70,7 +70,7 @@ const items: ExperienceItem[] = [
   },
   {
     years: 'Aug 2020 — Present',
-    period: '2020 — NOW',
+    period: 'NOW',
     role: 'Senior Frontend / UI Developer',
     company: 'Alternative Agency, Dubai, UAE',
     org: 'Alternative Agency',
@@ -634,15 +634,38 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* The site's section rhythm, written out here because this section is the one
+   that cannot express it as `py-12 md:py-[120px]` — above lg it is a pinned
+   100vh stage and has no padding at all. The two steps below are the same
+   48px/120px every other section carries; the lg block further down is what
+   takes it back to zero. */
 .gantt-section {
   background: theme('colors.paper-soft');
-  padding: 6rem 0;
+  padding: 3rem 0;
 }
 
+@media (min-width: 768px) {
+  .gantt-section {
+    padding: 7.5rem 0;
+  }
+}
+
+/* `--gutter` is the site's container inset — 20px, 32px from `md` — held as a
+   property rather than repeated, because the rail below has to be full-bleed
+   against the *same* number and the two silently disagreed when they were
+   written out separately. Matches `px-5 md:px-8` on every other section. */
 .gantt-stage {
+  --gutter: 1.25rem;
+
   max-width: 1240px;
   margin: 0 auto;
-  padding: 0 1.25rem;
+  padding: 0 var(--gutter);
+}
+
+@media (min-width: 768px) {
+  .gantt-stage {
+    --gutter: 2rem;
+  }
 }
 
 .gantt-eyebrow {
@@ -748,12 +771,16 @@ onBeforeUnmount(() => {
     padding: 0;
   }
 
+  /* No padding of its own: it keeps `--gutter` from the base rule, so the
+     heading here starts on the same line as Skills' and Selected Work's. It
+     used to run `clamp(1.25rem, 3.5vw, 3.5rem)`, which reached 56px on a wide
+     screen inside the same 1240px cap — a chart 48px narrower than every
+     section above and below it, with its title visibly indented from theirs. */
   .gantt-stage {
     position: relative;
     display: flex;
     height: 100vh;
     align-items: center;
-    padding: 0 clamp(1.25rem, 3.5vw, 3.5rem);
     overflow: hidden;
   }
 
@@ -835,9 +862,9 @@ onBeforeUnmount(() => {
        --e rather than fading up from grey: collapsed, these four bars *are*
        the chart, and a chart of near-white slivers has nothing to read. */
     background: linear-gradient(105deg, var(--tint) 0%, var(--tint-wash) 100%);
-    box-shadow:
+    /* box-shadow:
       0 22px 46px -30px rgba(18, 18, 18, calc(var(--e, 0) * 0.55)),
-      inset 0 0 0 1px rgba(18, 18, 18, calc(var(--e, 0) * 0.05));
+      inset 0 0 0 1px rgba(18, 18, 18, calc(var(--e, 0) * 0.05)); */
     will-change: transform, width, height;
   }
 
@@ -886,6 +913,9 @@ onBeforeUnmount(() => {
   .gantt-ruler {
     display: none;
   }
+  .gantt-eyebrow{
+    color: theme('colors.steel/60%');
+  }
 
   /* Both of these are condensations for the card, and .gantt-detail states the
      same things in full right below them. Redundant here. */
@@ -922,8 +952,11 @@ onBeforeUnmount(() => {
    composables/useSwipeRail.ts. */
 @media (max-width: 1023px) {
   .gantt-chart {
-    /* Matches .gantt-stage's own 1.25rem padding. */
-    --rail-gutter: 1.25rem;
+    /* The rail cancels its container's inset and restores it as padding, so it
+       has to be handed exactly the inset the container is using — inherited
+       from .gantt-stage rather than restated, which is how it stays right at
+       both 20px and 32px. */
+    --rail-gutter: var(--gutter);
   }
 
   /* The tint the chart has carried on desktop since it was built, finally on
@@ -932,11 +965,23 @@ onBeforeUnmount(() => {
   .gantt-row {
     display: flex;
     border-radius: 22px;
+    /* The period below hangs past the card's bottom edge on purpose, and this
+       is what stops that costing a scrollbar. `.swipe-rail` sets `overflow-x:
+       auto` and nothing on the other axis — and `overflow-y: visible` computes
+       to `auto` the moment its partner is not visible, so any descendant
+       hanging below a card turns the rail into a vertically scrollable box.
+       Hidden by `scrollbar-width: none`, so it shows up as a rail that eats the
+       first ~26px of a vertical drag before the page moves.
+
+       Clipping here rather than on the rail: the rail's own clip would cut the
+       cards' drop shadows off flat, while a clip on the row crops to its 22px
+       radius and leaves the shadow — which is outside this box — alone. Same
+       declaration the chart's rows carry above lg, for the same reason. */
+    overflow: hidden;
     padding: 1.5rem 1.35rem;
     background: linear-gradient(105deg, var(--tint) 0%, var(--tint-wash) 100%);
-    box-shadow:
-      0 18px 40px -28px rgba(18, 18, 18, 0.5),
-      inset 0 0 0 1px rgba(18, 18, 18, 0.05);
+    box-shadow:none;
+      min-height: 275px;
   }
 
   /* Fills the row the rail stretched it to, so the period below can find the
@@ -993,12 +1038,15 @@ onBeforeUnmount(() => {
 
   /* Scaled with the card. At the old 44px it was a quarter of the height a
      shortened card has to spend, which is a lot for a decoration. */
+     .gantt-card{
+      position: relative;
+     }
   .gantt-period {
     display: block;
     margin-top: auto;
     padding-top: 1.25rem;
     font-family: theme('fontFamily.display');
-    font-size: clamp(28px, 8vw, 38px);
+    font-size: clamp(28px, 21vw, 16em);
     font-weight: 900;
     line-height: 1;
     letter-spacing: -0.02em;
@@ -1006,7 +1054,11 @@ onBeforeUnmount(() => {
        contrast floor for text, which is why it is aria-hidden — the range a
        screen reader gets is .gantt-detail-years, in full and with months,
        from the block above. */
-    color: rgba(18, 18, 18, 0.14);
+        color: rgb(105 105 105 / 10%);
+        position: absolute;
+        bottom: -50px;
+        top: auto;
+        right: 0px;
   }
 
   /* The list's separators are what the card replaces. */

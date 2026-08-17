@@ -1,7 +1,25 @@
 # Mobile: swipe rails and the sections around them
 
 **Date:** 2026-08-04
-**Status:** approved, implementing
+**Status:** approved, implemented — partly superseded for Selected Work (2026-08-17)
+
+> **Superseded, Selected Work only.** That section is a sticky deck at every
+> width now and no longer has a rail; Skills and Experience keep theirs and the
+> rest of this document stands.
+>
+> The rail there was covering for a card that was too tall to pin below 992px,
+> not for anything about touch — a single-column card was ~840px against a
+> frame it had to stack inside. Fixing the height retired it: the row/column
+> switch moved to 900px, `--shot-cap` sizes the shot from the frame rather than
+> the container, and the per-card stagger narrowed. Measured across 320→1440,
+> every frame either stacks with clearance or falls back to a plain list (under
+> 500px of height, or under 360px of width, where no readable card fits).
+>
+> What it buys is the thing this document's own "The idea" section is about:
+> the ball's journey no longer stops dead at 1024px and resume two sections
+> later, and there is one presentation of the work to reason about rather than
+> two. See `components/ProjectsSection.vue` and the `deck` screen in
+> `tailwind.config.ts`.
 
 ## The problem
 

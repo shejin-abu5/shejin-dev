@@ -44,6 +44,82 @@ const PIN_SCROLL = 1400
 const sectionRef = ref<HTMLElement | null>(null)
 const tileRailRef = ref<HTMLElement | null>(null)
 const lastTileRef = ref<HTMLElement | null>(null)
+const tilesRef = ref<HTMLElement | null>(null)
+
+/**
+ * Where the tiles start fading in, as a ScrollTrigger start string on the row
+ * itself rather than on the section.
+ *
+ * On the row, and that is the one decision here worth arguing. Measured at 1440,
+ * the rows sit 230px and 412px below the section's top and stand 168px tall, so
+ * a single section-anchored window cannot serve both: any window loose enough to
+ * put the bottom row on screen has already finished the top one, and any window
+ * tight enough for the top row finishes the bottom one 40px *below the fold*.
+ * That was the first version of this and it was a fade nobody could see.
+ *
+ * `top 100%` is the instant the row's own top edge crosses the fold — the
+ * earliest moment there is anything to look at. Where it ends is a different
+ * question and a per-row one; see FILL_GATES.
+ */
+const FILL_START = 'top 100%'
+
+/**
+ * Where each row has to be finished, as ScrollTrigger end strings on the
+ * *section* — one per row, given in row order.
+ *
+ * These are the ball's own two windows with clearance on them, and the coupling
+ * is the whole reason they are here rather than inlined. The tiles rise as they
+ * fade, and the ball rides two surfaces on this card: the rail on the top row's
+ * top line, from `top 58%`, and the last tile, from `top 22%`. `useBallPerch`
+ * reads `getBoundingClientRect` live on every frame, so a row still carrying a
+ * transform when the ball arrives is a surface moving under it.
+ *
+ * 4% of clearance each, which at 1080 is ~43px of scroll — enough for the
+ * smoothed scrub below to have caught up rather than still be easing in.
+ *
+ * `endTrigger` is what lets a window start on the row and end on the section.
+ * The two ends answer different questions: when is there something to see, and
+ * when does the ball need it — and neither element can answer both.
+ *
+ * The side effect is that the window shortens on a short viewport, because the
+ * row offsets are fixed px and the gates are a fraction of the fold. At 1080 the
+ * top row gets 224px of scroll, at 720 it gets 74. That is correct rather than
+ * unfortunate: 74px is genuinely all the scroll there is between that row
+ * appearing and the ball setting off across it.
+ */
+const FILL_GATES = ['top 62%', 'top 26%']
+
+/**
+ * The distance and the shape of one tile's arrival.
+ *
+ * Half the card reveal's 46px. The card is a panel crossing the page and can
+ * afford the travel; these are six panels inside it, and at 46 each the card
+ * reads as a grid sliding into place rather than as a card being filled in.
+ */
+const FILL_RISE = 24
+
+/**
+ * Below the ball's width there is nothing to be finished for — no ball, no pin
+ * — so the rows end on themselves and this is the only end they need.
+ */
+const FILL_END_FREE = 'top 72%'
+
+/**
+ * The column counts, as the queries that produce them, for everything below the
+ * ball's width. Given to one `mm.add` so the rows are regrouped when the grid
+ * reflows: a row is read off the tiles' own `offsetTop`, which is only true
+ * until the column count changes under it.
+ *
+ * They mirror the two breakpoints in <style> and BALL_QUERY above them, and the
+ * `.98`s are not decoration — at a fractional viewport width, which is what a
+ * browser zoom or a scaled display produces, integer complements leave slivers
+ * where no query matches and the tiles never fade in at all.
+ */
+const NO_BALL_QUERIES = {
+  one: '(max-width: 559.98px)',
+  two: '(min-width: 560px) and (max-width: 899.98px)',
+  three: '(min-width: 900px) and (max-width: 1023.98px)'
+}
 
 /**
  * The tiles: six, three across and two rows deep.
@@ -142,7 +218,7 @@ const TILES: Tile[] = [
     note: 'Bharathiar University · 2008—2011',
     glyph: CAP
   },
-  { label: 'Position', value: 'Frontend Developer', glyph: PITCH },
+  { label: 'Position', value: 'Frontend/UX Developer', glyph: PITCH },
   {
     label: 'Number',
     value: '28',
@@ -153,7 +229,7 @@ const TILES: Tile[] = [
     glyph: SHIRT
   },
   { label: 'Current club', value: 'Alternative Agency', glyph: BADGE },
-  { label: 'Total appearances', value: '12+ years', glyph: CALENDAR },
+  { label: 'Total seasons', value: '12+ years', glyph: CALENDAR },
   {
     label: 'Red cards',
     value: '0',
@@ -228,6 +304,9 @@ const CELLS: Array<[x: number, y: number, opacity?: number]> = [
  */
 useBallPerch(() => tileRailRef.value, {
   trigger: () => sectionRef.value,
+  // Read twice: FILL_GATES[0] is this line with clearance on it, because the top
+  // row has to have stopped rising before the ball sets off across it. Moving
+  // this without moving that puts the ball on a surface still in motion.
   start: 'top 58%',
   end: 'top 32%',
   // Ends over the tile below that the ball steps onto, so the step down is a
@@ -257,6 +336,8 @@ useBallPerch(() => tileRailRef.value, {
 // top, which is not a roll anyone sees.
 useBallPerch(() => lastTileRef.value, {
   trigger: () => sectionRef.value,
+  // FILL_GATES[1] is this line with clearance on it — same argument as the perch
+  // above, for the bottom row.
   start: 'top 22%',
   end: 'top -8%',
   /*
@@ -348,6 +429,140 @@ onMounted(() => {
 
     return () => st.kill()
   })
+
+  /**
+   * The tiles of one row filling in, on the reader's own scroll.
+   *
+   * The card arrives as one piece — it carries `.reveal`, a time-based fade and
+   * rise like every other panel on the site — and then the stats are written
+   * onto it as the reader keeps going. That split is the whole idea: a
+   * registration card is a blank that gets filled in, and a scrub is the only
+   * clock that makes the filling feel like the reader is doing it rather than
+   * something that happened at them while they were reading the row above.
+   *
+   * A row at a time, and staggered inside it. Fired together, three tiles at one
+   * opacity is a slab appearing; overlapped, it reads as a wave crossing the card
+   * left to right, which is the direction the ball crosses it a moment later.
+   */
+  const fillRow = (tiles: HTMLElement[], trigger: ScrollTrigger.Vars) => {
+    /*
+      A `set` and then a `to`, rather than the single staggered `gsap.from` this
+      was first written as. The `from` is the obvious shape and it is wrong here.
+
+      A staggered `from` only puts an element into its start state when that
+      element's own slot in the stagger opens; until then it renders at whatever
+      it already is. Measured on the running page, that meant the bottom row's
+      last two tiles sat at full opacity through the first third of the window and
+      then faded *out* — 1.00 down to 0.18 — as their slots arrived. Six facts
+      appearing, un-appearing, and appearing again.
+
+      The hidden state has to hold for the whole row from the top of the window,
+      which is exactly what a plain `set` does. It is reverted with the rest of
+      its branch when the media query flips, because gsap.matchMedia records
+      zero-duration tweens along with everything else — and it reverts every
+      outgoing context before it runs any incoming one, so the two branches below
+      cannot undo each other on a resize across 1024.
+    */
+    gsap.set(tiles, { opacity: 0, y: FILL_RISE })
+
+    return gsap.to(tiles, {
+      opacity: 1,
+      y: 0,
+      /*
+        Linear, and the same argument the work deck's settle makes: the scrubbed
+        clock *is* the reader's scroll, and an ease laid over it is a second
+        opinion about how fast they are moving. The shape of the arrival comes
+        from the overlap between tiles, not from a curve on each one.
+      */
+      ease: 'none',
+      duration: 1,
+      // Against `duration: 1` this leaves each tile roughly three quarters of the
+      // window to itself and the rest overlapping its neighbours — three discrete
+      // pops at one end of the dial, a slab at the other.
+      stagger: 0.18,
+      scrollTrigger: {
+        // Smoothed, at the site's usual figure. It costs a little clearance at
+        // the end of the window, which is what the 4% on each of FILL_GATES is
+        // there to pay for.
+        scrub: 0.6,
+        invalidateOnRefresh: true,
+        ...trigger
+      }
+    })
+  }
+
+  /**
+   * The tiles grouped into the rows the grid has actually laid them out in.
+   *
+   * Read off `offsetTop` rather than counted in threes, because the column count
+   * is a media query — three across from 900px, two from 560, one below that —
+   * and a row is whatever the grid says it is at the width being rendered. Every
+   * caller re-runs on the query that would change it.
+   */
+  const rows = () => {
+    const byTop = new Map<number, HTMLElement[]>()
+    for (const tile of tilesRef.value?.querySelectorAll<HTMLElement>('.player-tile') ?? []) {
+      const top = Math.round(tile.offsetTop)
+      byTop.set(top, [...(byTop.get(top) ?? []), tile])
+    }
+    return [...byTop.values()]
+  }
+
+  // `kill`, not `revert`: reverting a `to` restores the values it started from,
+  // which here are the hidden ones the `set` wrote. The matchMedia context
+  // reverting around this is what puts the tiles back.
+  const killAll = (tws: gsap.core.Tween[]) => () =>
+    tws.forEach((tw) => {
+      tw.scrollTrigger?.kill()
+      tw.kill()
+    })
+
+  /**
+   * With the ball: each row starts on itself and ends on the section.
+   *
+   * The two ends answer different questions, which is why they hang off
+   * different elements. When is there anything to look at is a question about
+   * the row — FILL_START, its own top edge crossing the fold. When does it have
+   * to be finished is a question about the ball, whose windows are cut against
+   * the section — FILL_GATES, one per row, in row order.
+   *
+   * Both are also, incidentally, before the pin: the pin starts at `top top` and
+   * the later gate is 26%, so neither row can be caught half-faded and frozen
+   * there for all PIN_SCROLL of it.
+   *
+   * Always two rows of three here — the grid is three across from 900px and this
+   * branch starts at 1024 — but they are still read off the layout rather than
+   * sliced in threes, so the gate pairing cannot drift from the rows it names.
+   */
+  mm.add(BALL_QUERY, () => {
+    const el = sectionRef.value
+    if (!el) return
+
+    const tws = rows().map((row, i) =>
+      fillRow(row, {
+        trigger: row[0],
+        start: FILL_START,
+        endTrigger: el,
+        end: FILL_GATES[i] ?? FILL_GATES[FILL_GATES.length - 1]
+      })
+    )
+
+    return killAll(tws)
+  })
+
+  /**
+   * Without it: each row starts and ends on itself.
+   *
+   * Nothing is pinned here and nothing rides the tiles, so there is no gate to
+   * finish before and the section has no say in it — a row fades in over the
+   * stretch it takes to arrive, and that is the whole rule. Which matters most
+   * below 560px, where the six are stacked one per row over something like 700px
+   * of page: a window with any single anchor would spend most of itself on tiles
+   * still well below the fold.
+   */
+  mm.add(NO_BALL_QUERIES, () => killAll(
+    rows().map((row) => fillRow(row, { trigger: row[0], start: FILL_START, end: FILL_END_FREE }))
+  ))
 })
 
 onBeforeUnmount(() => {
@@ -384,7 +599,7 @@ onBeforeUnmount(() => {
          Before the container in the markup because that is where a heading
          belongs in the reading order; painted over it by `z-index` rather than
          by document order, which is the whole trick — see the style block. -->
-    <h2 class="player-heading">Stat</h2>
+    <h2 class="player-heading">Statistics</h2>
 
     <div class="relative mx-auto max-w-[960px] px-5 md:px-8">
       <div class="reveal player-card">
@@ -393,7 +608,7 @@ onBeforeUnmount(() => {
              getBoundingClientRect reports it either way. -->
         <span ref="tileRailRef" class="player-rail" aria-hidden="true" />
 
-        <dl class="player-tiles">
+        <dl ref="tilesRef" class="player-tiles">
           <div
             v-for="(tile, i) in TILES"
             :key="tile.label"
@@ -651,10 +866,27 @@ onBeforeUnmount(() => {
 }
 
 /* Stacked one per row, a tile does not need to be tall enough to sit beside
-   another one — and four at the full height is 715px of card on an 844px phone,
-   which is a screen spent on four short facts. The height above is there to keep
-   three tiles square-ish in a row; in a column nothing is being matched. */
+   another one — the 168px above is there to keep three of them square-ish across
+   a row, and six at that height is over 1100px of card on an 844px phone, which
+   is two screens spent on six short facts. So the floor comes off.
+
+   What replaces it is a floor the tiles set themselves. Sized independently the
+   six run ragged: Academy carries a note and a value that wraps to two lines,
+   Position wraps to two, Red cards is a single character — a column stepping
+   between roughly 83px and 145px reads as six different components rather than
+   one set of stats.
+
+   `grid-auto-rows: 1fr` matches them. In a grid with no height of its own an
+   `fr` row resolves to the tallest row's content, so every tile takes exactly
+   the height Academy needs and no more. That is the reason it is this rather
+   than a `min-height` in px: the tallest tile is whichever one wraps, and which
+   one wraps changes between a 320px phone and a 430px one — a number written
+   here would be short at one width and padding at the other. */
 @media (max-width: 559px) {
+  .player-tiles {
+    grid-auto-rows: 1fr;
+  }
+
   .player-tile {
     min-height: 0;
     padding: 1.25rem 1rem;

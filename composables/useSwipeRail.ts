@@ -5,9 +5,13 @@
  * where the ball and the chart don't, so the two must never disagree about
  * which presentation is running.
  *
- * Selected Work is the exception and passes its own line: its cards stack as a
- * deck from 992px, which is lower than this, so between the two it is neither
- * a rail nor a chart but a deck. See the `deck` screen in tailwind.config.ts.
+ * Selected Work used to pass its own, lower line here and no longer uses this
+ * at all: its cards are a sticky deck at every width. The rail it had was
+ * covering for a card that was too tall to pin below 992px rather than for
+ * anything about touch, so fixing the card's height retired it. See the `deck`
+ * screen in tailwind.config.ts and `--shot-cap` in ProjectsSection.vue. That
+ * leaves `query` with only its default caller — kept a parameter because the
+ * shape of the problem hasn't changed, only how many sections have it.
  */
 export const RAIL_QUERY = '(max-width: 1023px)'
 
@@ -26,12 +30,10 @@ export const RAIL_QUERY = '(max-width: 1023px)'
  * nothing during SSR.
  *
  * @param railFn        Resolves the scroll container.
- * @param slideSelector Matches the slides *within* it. Explicit because both
- *                      rails carry non-slide children — the work deck's
- *                      sentinel and its trailing spacer.
+ * @param slideSelector Matches the slides *within* it. Explicit because a rail
+ *                      may carry non-slide children.
  * @param query         Where this particular rail applies. Defaults to
- *                      RAIL_QUERY; Selected Work overrides it because its deck
- *                      reaches further down than the others do.
+ *                      RAIL_QUERY, which is now what every caller uses.
  */
 export function useSwipeRail(
   railFn: () => HTMLElement | null,

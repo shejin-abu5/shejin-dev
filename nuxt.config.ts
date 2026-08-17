@@ -4,6 +4,24 @@ export default defineNuxtConfig({
 
   modules: ['@nuxtjs/tailwindcss'],
 
+  // Keeps authored `<!-- … -->` comments out of the rendered DOM.
+  //
+  // Every template on this site is annotated, and those notes are for whoever
+  // opens the .vue file — not for whoever opens devtools. Vue's parser emits
+  // each one as a real comment node by default (see `oncomment` in
+  // compiler-core, gated on nothing but this flag), so they survive into the dev
+  // DOM and into the SSR markup `nuxt generate` writes out. Dropping them at
+  // parse time leaves the source exactly as documented and the inspector clean.
+  //
+  // It does not touch the comments Vue *generates* — the `<!--[-->` fragment
+  // anchors and `<!---->` v-if placeholders — which are load-bearing for
+  // hydration and are not produced by this code path.
+  vue: {
+    compilerOptions: {
+      comments: false
+    }
+  },
+
   css: ['~/assets/css/main.css'],
 
   // Site URL used to build canonical / OG absolute URLs.

@@ -756,9 +756,8 @@ export const POSES: Record<string, Pose> = {
   },
 
   /**
-   * Hands on hips, weight on one leg — the pose a player stands in when the
-   * game is over. Kept for anywhere that wants a standing rest; the footer now
-   * uses `lie`.
+   * The footer. Hands on hips, weight on one leg — the pose a player stands in
+   * when the game is over. `lie` above is the alternative and is unused.
    *
    * The forearms fold hard back against the upper arms to put the hands on the
    * hips. That is what the near-square `forearm` values are; they are not a
@@ -769,6 +768,9 @@ export const POSES: Record<string, Pose> = {
    * settles at the midpoint of the footer's rule, and a raised boot that misses
    * it by twenty pixels is a man balancing on nothing. Both feet down always
    * lands.
+   *
+   * Both feet down is also the *bottom* of a tap, which is what this is now
+   * half of — see `restTap`.
    */
   rest: {
     joints: {
@@ -782,6 +784,39 @@ export const POSES: Record<string, Pose> = {
       shinB: 4,
       legF: -6,
       shinF: 3
+    },
+    ball: BALL_AT_FOOT
+  },
+
+  /**
+   * ...and the top of the tap. The front toe up, and nothing else.
+   *
+   * Everything from the hip up is copied from `rest` unchanged, deliberately
+   * and to the degree: a tap is one foot, and any drift in the shoulders, the
+   * head or the standing leg turns a man waiting into a man fidgeting. The
+   * three numbers that do move are the front thigh, its shin and its ankle, and
+   * the ankle carries almost all of it.
+   *
+   * The toe goes up rather than the heel, which is not a stylistic call — it is
+   * the only direction an ankle pivot can afford. The pivot sits eighteen units
+   * above the sole, nineteen behind the toe and nineteen in front of the heel,
+   * so rolling the boot heel-up drives the toe fourteen units through the floor
+   * while toe-up costs six units of heel. Six is also honest: a tap rocks the
+   * weight back onto the heel, it does not lift it.
+   */
+  restTap: {
+    joints: {
+      torso: 2,
+      head: 5,
+      armB: 50,
+      forearmB: -96,
+      armF: -52,
+      forearmF: 98,
+      legB: 7,
+      shinB: 4,
+      legF: -9,
+      shinF: 7,
+      footF: -26
     },
     ball: BALL_AT_FOOT
   }
@@ -853,6 +888,23 @@ export const CAMEOS: Record<
      */
     loop?: boolean
     /**
+     * Idle on a clock, weighted rather than even: held on `enter`, taken up to
+     * `hit` and dropped back out of it, forever.
+     *
+     * `loop` above cannot do this, and the difference is weight rather than
+     * pose count. A juggle is symmetric — as long up as down, eased the same
+     * both ways, because that is what a ball under a foot does. A tap is not:
+     * the toe goes up, drops hard, and the foot then sits there until the next
+     * one. Run through an even sine it reads as a foot waving.
+     */
+    tap?: boolean
+    /**
+     * Seconds up into `hit` and back down out of it, for a tap. Whatever is
+     * left of `period` is the beat between taps, held on `enter`.
+     */
+    rise?: number
+    fall?: number
+    /**
      * Where the contact sits in the window, and how much of it the contact
      * takes — both fractions of the whole scrub.
      *
@@ -913,5 +965,23 @@ export const CAMEOS: Record<
     lift: 74
   },
   education: { enter: 'header', settle: 'stand', hit: 'headerHit' },
-  footer: { enter: 'rest', settle: 'rest' }
+  // Stood waiting, tapping a foot — and the only cameo on the page with nothing
+  // to react to. Every other one is timed off a ball going past; this one's ball
+  // has come to rest on the rule beside him and stays there for as long as the
+  // page does, so a move keyed to its arrival is a move that plays once and then
+  // never again. What is left is what a player does while he waits, which is
+  // what the bottom of a page is.
+  //
+  // 0.78s a tap: quick enough to read as impatience rather than as a stretch,
+  // slow enough that the beat between them is visible. Two thirds of that beat
+  // is the foot sitting still — see `tap`.
+  footer: {
+    enter: 'rest',
+    hit: 'restTap',
+    settle: 'rest',
+    tap: true,
+    period: 0.78,
+    rise: 0.26,
+    fall: 0.12
+  }
 }

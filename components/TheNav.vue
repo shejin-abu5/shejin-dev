@@ -111,7 +111,7 @@ const { active } = useScrollSpy(links.map((link) => link.id))
     <div
       v-show="menuOpen"
       id="mobile-menu"
-      class="md:hidden mt-5 flex flex-col gap-1 border-t border-hair pt-5"
+      class="md:hidden mt-5 flex flex-col gap-1 pt-5"
     >
       <a
         v-for="link in links"

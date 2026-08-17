@@ -64,6 +64,47 @@ const HERO_LEAVE_X = () => Math.max(0.2 * window.innerWidth, 210)
 const HERO_HOLD_X = () => Math.max(0.09 * window.innerWidth, 120)
 
 /**
+ * The stretch of the phone's pinned read during which the headline does not
+ * move, as fractions of that read.
+ *
+ * This is the "delay" the volley needs, and it is a hold on the *motion* rather
+ * than on the scrollbar. Blocking touch scroll for a second would do what it
+ * says on Android and stutter against momentum scrolling on iOS, and it traps
+ * anyone who simply wants past the hero. Freezing the headline instead costs the
+ * reader nothing — the page still answers the finger — and it buys the same
+ * thing the lock was for, which is a strike that happens against a still frame
+ * instead of one sliding out from under it.
+ *
+ * Desktop has no equivalent and wants none: there the read is a third longer in
+ * absolute scroll and the ball is handed to a journey that carries on down the
+ * page, so there is nothing to pause for.
+ */
+const HOLD_FROM = 0.24
+const HOLD_TO = 0.56
+
+/**
+ * How much scroll the hero allows before the volley fires.
+ *
+ * Owned here rather than in ThePlayer — which is where it used to live as a flat
+ * 90 — because on the phone it has to agree with the hold above, and the hold is
+ * this component's. Expressed as a fraction of the pinned read rather than in
+ * px so the two cannot disagree at any viewport height: 90px is a quarter of a
+ * short phone's read and a seventh of a tall one's, and the strike would have
+ * drifted out of the still band on one of them.
+ *
+ * Just inside the hold, so the headline has already come to rest by the time he
+ * swings. The desktop number is unchanged.
+ */
+const volleyAt = () => {
+  if (window.innerWidth >= 768) return 90
+  const wrap = wrapRef.value
+  const frame = wrap?.querySelector<HTMLElement>('.hero-frame')
+  if (!wrap || !frame) return 90
+  const pinned = Math.max(1, wrap.offsetHeight - frame.offsetHeight)
+  return Math.round(pinned * (HOLD_FROM + 0.04))
+}
+
+/**
  * The scroll at which the mark's centre reaches HERO_LEAVE_X, as a ScrollTrigger
  * end offset. Re-invoked on every refresh, so a resize re-resolves it.
  *
@@ -344,7 +385,13 @@ onMounted(() => {
   // the scrub is mapped over: 100vh of pinned scroll on desktop, ~66vh on the
   // phone. Raising the spacer does not slow the slide down so much as stretch
   // the same travel over more wheel, which is what reads as dead scroll.
-  mm.add('all', () => {
+  // Two arms rather than the single `all` this was, and the `any: 'all'` member
+  // is load-bearing: a gsap.matchMedia given a conditions object runs only while
+  // at least one of them matches, so a set of purely max-width arms would leave
+  // the desktop with no pinned read at all. `any` is the arm that is always
+  // true; `phone` is the one that is read.
+  mm.add({ phone: '(max-width: 767.98px)', any: 'all' }, (ctx) => {
+    const phone = !!ctx.conditions?.phone
     const wrap = wrapRef.value
     const track = trackRef.value
     // The padded element, not the frame: the gutter moved onto this when the
@@ -389,21 +436,69 @@ onMounted(() => {
       invalidateOnRefresh: true
     }
 
-    gsap.fromTo(
-      track,
-      { x: 0 },
-      { x: () => -distance(), ease: 'none', scrollTrigger }
-    )
-
     // The real <h1> is revealed over the grey ghost underneath it. The
     // starting clip is set here rather than in CSS on purpose: if this
     // script never runs, the heading stays plainly visible instead of
     // being clipped to nothing.
-    gsap.fromTo(
-      track.querySelector('.hero-ink'),
-      { clipPath: 'inset(0 100% 0 0)' },
-      { clipPath: 'inset(0 0% 0 0)', ease: 'none', scrollTrigger }
+    const ink = track.querySelector('.hero-ink')
+
+    if (!phone) {
+      gsap.fromTo(
+        track,
+        { x: 0 },
+        { x: () => -distance(), ease: 'none', scrollTrigger }
+      )
+
+      gsap.fromTo(
+        ink,
+        { clipPath: 'inset(0 100% 0 0)' },
+        { clipPath: 'inset(0 0% 0 0)', ease: 'none', scrollTrigger }
+      )
+      return
+    }
+
+    // The phone runs the same slide with a hold cut into the middle of it, on
+    // one timeline rather than two tweens — the slide and the fill have to stop
+    // and start together, and two independently scrubbed tweens agreeing about
+    // when to pause is a coincidence waiting to come apart.
+    //
+    // The travel is split in the same proportion as the two moving stretches,
+    // which is what keeps the headline's speed identical either side of the
+    // pause. Split it evenly instead and the second half runs at a different
+    // rate to the first, so the hold reads as a gear change rather than as a
+    // held beat.
+    const moving = HOLD_FROM + (1 - HOLD_TO)
+    const before = HOLD_FROM / moving
+
+    // Positions and durations below are fractions of the whole read, and they
+    // add to exactly 1 — a scrub maps the scroll window onto whatever duration
+    // the timeline happens to have, so a total of anything else silently
+    // rescales every number here.
+    const tl = gsap.timeline({ scrollTrigger })
+
+    tl.fromTo(
+      track,
+      { x: 0 },
+      { x: () => -distance() * before, ease: 'none', duration: HOLD_FROM },
+      0
     )
+      .fromTo(
+        ink,
+        { clipPath: 'inset(0 100% 0 0)' },
+        {
+          clipPath: `inset(0 ${((1 - before) * 100).toFixed(2)}% 0 0)`,
+          ease: 'none',
+          duration: HOLD_FROM
+        },
+        0
+      )
+      // The hold. An empty tween, because a gap in a timeline is not a pause —
+      // a scrub interpolates across unoccupied time exactly as if it were not
+      // there, so the stillness has to be something the timeline is actually
+      // doing.
+      .to({}, { duration: HOLD_TO - HOLD_FROM }, HOLD_FROM)
+      .to(track, { x: () => -distance(), ease: 'none', duration: 1 - HOLD_TO }, HOLD_TO)
+      .to(ink, { clipPath: 'inset(0 0% 0 0)', ease: 'none', duration: 1 - HOLD_TO }, HOLD_TO)
   })
 
   // The phone's spinning orb used to live here, and the player has taken its
@@ -425,7 +520,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="wrapRef" class="hero-scroll h-[166vh] md:h-[200vh]">
+  <!-- 230vh on the phone against the desktop's 200. What the scrub is mapped
+       over is `spacer − frame`, so this is 130vh of pinned scroll where it used
+       to be 66 — and the extra is spent on two things rather than one: the
+       headline's slide is stretched over about a third more wheel, and the hold
+       in the middle of it (see HOLD_FROM/HOLD_TO) buys the volley a stage that
+       is not moving. The file's standing warning about a taller spacer reading
+       as dead scroll is about raising it with nothing to fill it; here the
+       thing that fills it is the strike. -->
+  <div ref="wrapRef" class="hero-scroll h-[230vh] md:h-[200vh]">
     <header
       class="hero-frame sticky top-0 flex h-screen flex-col justify-center overflow-hidden pt-[70px] md:pt-0"
     >
@@ -476,24 +579,21 @@ onUnmounted(() => {
              lands where the journey picks it up. Passed as a getter because
              markRef is not resolved when ThePlayer is created, and because the
              mark slides across the frame while the hero is read. -->
-        <ThePlayer variant="hero" :aim-at="() => markRef" />
+        <ThePlayer variant="hero" :aim-at="() => markRef" :volley-at="volleyAt" />
       </div>
 
-      <div class="hero-cta top-[6em] flex flex-wrap items-center gap-2.5 px-5 md:hidden">
-        <a
-          href="mailto:shejin.abu@gmail.com"
-          class="inline-flex min-h-[46px] items-center rounded-full bg-ink px-5 font-data text-[13px] text-paper transition-colors hover:bg-accent-text"
-        >
-          Email me
-        </a>
-        <a
-          href="/files/ShejinAbu-26.pdf"
-          download="Shejin-Abu-CV.pdf"
-          class="inline-flex min-h-[46px] items-center rounded-full border border-hair bg-paper px-5 font-data text-[13px] text-ink transition-colors hover:border-ink"
-        >
-          Download CV
-        </a>
-      </div>
+      <!-- The phone's Email / Download CV row stood here, `md:hidden`, so it was
+           only ever on the phone and taking it out is a phone-only change.
+
+           What it leaves behind is handled in the stylesheet rather than here:
+           the frame centres its children, so removing a 46px row moved the
+           heading down half of it, and `.hero-frame`'s bottom pad is what puts
+           it back. The `position: relative` rule that used to sit beside that
+           pad went with the row — it existed only to keep these buttons painting
+           in front of the player, whose shoulder reaches this band.
+
+           Note for anyone restoring it: the phone now has no contact affordance
+           above the footer, because TheNav carries none either. -->
     </header>
   </div>
 
@@ -565,19 +665,16 @@ onUnmounted(() => {
      It also answers what removing the orb left behind. That ball filled the
      middle of this frame, and taking it out for a figure standing at the foot
      of the frame emptied the very part of the screen the complaint was about.
-     Moving the type down onto him closes the gap rather than relocating it. */
-  .hero-frame {
-    padding-bottom: 26vh;
-  }
+     Moving the type down onto him closes the gap rather than relocating it.
 
-  /* The buttons sit above the player rather than behind him. He is absolutely
-     placed and therefore paints after the in-flow rows whatever the DOM order,
-     and at phone widths his shoulder can still reach the button row — `relative`
-     with no offset puts .hero-cta back in front on the strength of coming
-     later. (The orb this rule was originally written for is gone; the reason
-     survived it intact.) */
-  .hero-cta {
-    position: relative;
+     31vh rather than the 26vh it was, and the five points are the button row.
+     The frame centres its children in what the padding leaves, so deleting a
+     46px row dropped the heading 23px — half of it — straight onto the ball's
+     flight path. A little over 5vh of extra pad on an average phone is the same
+     23px back the other way, which holds the heading where it was composed
+     rather than where the deletion left it. */
+  .hero-frame {
+    padding-bottom: 31vh;
   }
 
   /* The section's usual opening pad, halved. The hero closes on a screen of

@@ -3,7 +3,6 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReveal } from '~/composables/useReveal'
 import { BALL_QUERY, ballClock, registerPerch, useBallPerch } from '~/composables/useScrollBall'
-import { useSwipeRail } from '~/composables/useSwipeRail'
 import newPatrolImg from '~/assets/img/works/new-patrol.webp'
 import partsImg from '~/assets/img/works/Genuine-Nissan-Parts-GHANA.webp'
 import magniteImg from '~/assets/img/works/magnite.webp'
@@ -59,9 +58,9 @@ const projects: Project[] = [
   {
     brand: 'Nissan',
     title: 'Smart Test Drive',
-    summary:' Smart Test Drive tool for great customer experience.',
+    summary:' Smart Test Drive tool for great customer experience journey.',
     tech: 'Vue.js · Google Maps API',
-    demoUrl: 'https://smartdrive-app.alt-test-server.com/en/choose-language?showroomId=0010N00004IfscmQAB&debug=true',
+    demoUrl: null,
     liveUrl: null,
     demoLabel: null,
     image: smartImg
@@ -82,7 +81,7 @@ const projects: Project[] = [
     title: 'Petromin KSA',
     summary:
       'Dealer website for Nissan in Saudi Arabia, part of the Middle East rollout with RTL-aware layouts.',
-    tech: 'Vanilla JS · SASS',
+    tech: 'Vanilla JS · CMS',
     demoUrl: null,
     liveUrl: 'https://en.petromin-nissan.com/',
     demoLabel: null,
@@ -109,6 +108,40 @@ const cards = projects.map((project) => {
     link: url ? { url, label: project.demoLabel ?? hostLabel(url) } : null
   }
 })
+
+/**
+ * Where each card's defocus starts and ends, as a percentage of that card's own
+ * `view()` range. See `work-card-defocus` in <style> for what the effect is and
+ * why these are a table rather than a formula.
+ *
+ * The short version: a `view()` range on a *sticky* element swallows the whole
+ * distance the element spends stuck, so the range is a different length for
+ * every card — card 1 holds the frame while five more arrive, card 5 while one
+ * does. The same physical moment therefore sits at a different percentage on
+ * each card's clock, and the walk from 17% to 31% across the deck is convex,
+ * not linear. It was a linear `calc()` off `--index` first, which is within two
+ * points at the ends and wrong in the middle: measured, cards 2 to 4 began
+ * blurring when the next card was 53-63% up the frame rather than 40%.
+ *
+ * Each pair is [the next card 40% into the frame, the next card covering this
+ * one completely]. Averaged over 375x667, 390x844 and 768x1024 — the numbers
+ * move about two points across that span, because the frame height appears on
+ * both sides of the fraction and very nearly cancels.
+ *
+ * Re-measure if the card count, the 5vh gap or the tail changes: scroll the
+ * deck in small steps and, for each card, record `getComputedStyle(card)` of a
+ * `@property` counter driven by `cover 0% cover 100%` at the two moments.
+ */
+const DEFOCUS: ReadonlyArray<readonly [number, number]> = [
+  [17.3, 85.0],
+  [18.8, 82.1],
+  [21.3, 79.2],
+  [25.3, 76.3],
+  [31.3, 73.4]
+]
+
+/** The last card has no successor and never defocuses, so it never asks. */
+const defocusRange = (i: number) => DEFOCUS[i] ?? DEFOCUS[DEFOCUS.length - 1]
 
 const sectionRef = ref<HTMLElement | null>(null)
 const railRef = ref<HTMLElement | null>(null)
@@ -223,28 +256,32 @@ const holdK = () => {
 }
 const stackEnded = ref(false)
 
-// Below lg the deck is a swipe rail — see composables/useSwipeRail.ts and
-// `.swipe-rail` in assets/css/main.css. `deckRef` is the same element in both
-// presentations: a plain block that holds the sticky cards above lg, the
-// scroll container below it.
-const deckRef = ref<HTMLElement | null>(null)
-
 /**
- * Where this deck becomes a swipe rail — lower than the shared RAIL_QUERY.
+ * The deck — at every width now, rather than only above 992px.
  *
- * Selected Work stacks as a deck down to 992px, which is below the line the
- * other rails switch at, so between 992 and 1023 it is a deck while Skills and
- * Experience are already rails. One shared constant cannot say that, hence the
- * override. Kept in step with the `deck` screen in tailwind.config.ts and the
- * `max-width: 991px` blocks in <style> below.
+ * It used to hand over to a swipe rail below that, and the reason was never
+ * that a rail is the right thing on a phone: it was that the card was the
+ * wrong shape there. Below `deck` the card fell to a single full-bleed column
+ * — shot on top at the container's whole width, copy under it — which measured
+ * about 840px tall, and a sticky card cannot pin inside a frame shorter than
+ * itself. The rail was a workaround for a card-height problem wearing the
+ * clothes of a gesture decision.
+ *
+ * So the height is what got fixed, in three places, and the rail fell out:
+ * `deck` moved to 768px so tablets keep the desktop card's two-column shape;
+ * `--shot-cap` derives the shot's height from the frame on phones instead of
+ * letting the container's width dictate it; and `--step` narrows the stagger,
+ * which is 30px of the budget back on a phone rather than 50.
+ *
+ * What that buys is one presentation to reason about. The rail was the only
+ * place on the page asking the reader to learn a second gesture for the same
+ * six things, and it was the only one where the ball's journey — the spine of
+ * the whole page — simply stopped and picked up two sections later.
+ *
+ * Still referenced from script for `--tail`, which is measured rather than
+ * derived; see `setTail`.
  */
-const DECK_RAIL_QUERY = '(max-width: 991px)'
-
-const { active, isRail, goTo } = useSwipeRail(
-  () => deckRef.value,
-  '.work-card',
-  DECK_RAIL_QUERY
-)
+const deckRef = ref<HTMLElement | null>(null)
 
 // Where along the deck's width the walk starts and finishes. The heading rule
 // is its first step and the six cards are the rest, so the ball crosses the
@@ -383,6 +420,8 @@ useBallPerch(() => railRef.value, {
 
 let stackEndObserver: IntersectionObserver | null = null
 let deckMedia: ReturnType<typeof gsap.matchMedia> | null = null
+/** Kept so the ScrollTrigger listener it is registered on can be removed. */
+let setTail: (() => void) | null = null
 
 let holdMedia: ReturnType<typeof gsap.matchMedia> | null = null
 
@@ -462,9 +501,39 @@ onMounted(() => {
 
   stackEndObserver.observe(sentinel)
 
-  // One perch per card, gated on the same query the ball itself is gated on so
-  // the two can never disagree about whether the journey is running. Below lg
-  // the deck is a swipe rail and none of this exists.
+  /**
+   * The trailing spacer's height — one card's worth, measured off the card.
+   *
+   * Every card but the last holds the frame for its own height plus the gap,
+   * because that is how far it is to the next card's flow position. The last
+   * has nothing behind it, so the spacer is what it holds against, and a
+   * spacer that is not one card tall makes the deck's final beat the one beat
+   * that is a different length from all the others.
+   *
+   * It was `calc(var(--hero) + 56px)` in CSS, which is the card's height in
+   * exactly one of the three layouts it wears — the one where the shot is the
+   * tallest thing in it. Below `deck` the card is a column and the shot is
+   * about a third of it, so the same expression was short by ~300px and the
+   * last card left the frame while the fifth was still arriving. There is no
+   * expression that covers all three; a measurement covers all three by not
+   * being an expression.
+   *
+   * On `refreshInit` rather than a ResizeObserver: ScrollTrigger fires it
+   * immediately before it measures anything, so the height the deck's own
+   * triggers are built against is always the one that is on the element. A
+   * ResizeObserver would land on its own schedule and leave them a frame stale.
+   */
+  const tailCard = cardEls[cardEls.length - 1]
+  setTail = () => {
+    deckRef.value?.style.setProperty('--tail', `${Math.round(tailCard.offsetHeight)}px`)
+  }
+  setTail()
+  ScrollTrigger.addEventListener('refreshInit', setTail)
+
+  // One perch per card, gated on BALL_QUERY, which is the width the ball itself
+  // is gated on — so the two can never disagree about whether the journey is
+  // running. The deck stacks below that line too; it just does it without a
+  // ball riding it, on nothing but `position: sticky`.
   //
   // registerPerch rather than useBallPerch because a card's window is not
   // expressible as one trigger's start and end: a card is the front of the
@@ -595,17 +664,18 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stackEndObserver?.disconnect()
+  if (setTail) ScrollTrigger.removeEventListener('refreshInit', setTail)
   holdMedia?.revert()
   deckMedia?.revert()
 })
 </script>
 
 <template>
-  <section id="work" ref="sectionRef" class="relative py-12 md:py-[160px]">
-    <div ref="headBlockRef" class="relative z-10 mx-auto max-w-[1320px] bg-paper px-6 md:px-12">
+  <section id="work" ref="sectionRef" class="relative py-12 md:py-[120px]">
+    <div ref="headBlockRef" class="relative z-10 mx-auto max-w-[1240px] bg-paper px-5 md:px-8">
       <div class="reveal mb-9 flex flex-wrap items-end justify-between gap-6 md:mb-11">
         <div>
-          <span class="mb-3.5 block font-data text-[13px] tracking-wide text-accent-text">
+          <span class="mb-3.5 block font-data text-[13px] tracking-wide md:text-accent-text text-steel/60">
             01 — Selected work
           </span>
           <h2 class="font-display text-[clamp(30px,4.5vw,58px)] font-black uppercase leading-none tracking-tight">
@@ -637,7 +707,12 @@ onBeforeUnmount(() => {
            the handover point is at x=490 of the rule and 47% of it is 436, so the
            ball came to rest 31px short of a boot swinging through thin air. See
            `.work-player`. -->
-      <div class="relative mb-20 md:mb-28">
+      <!-- `mb-5` on a phone rather than the 80px this was. The rule inside is
+           `hidden md:block`, so below md the margin was separating the heading
+           from the deck across an element that isn't drawn — 80px of nothing on
+           top of the row's own 36, which pushed the first card most of a
+           thumbnail lower than it needed to sit. -->
+      <div class="relative mb-5 md:mb-28">
         <span ref="railRef" class="hidden h-px w-full bg-hair md:block" aria-hidden="true" />
 
         <div
@@ -676,42 +751,40 @@ onBeforeUnmount(() => {
          Only at `lg`, where the pin runs at all; below that it would be 420px
          of dead page. -->
     <div
-      class="work-runway mx-auto max-w-[1320px] px-6 md:px-12 md:pt-0 pt-3"
+      class="work-runway mx-auto max-w-[1240px] px-5 md:px-8 md:pt-0 pt-3"
       :style="{ '--runway': `${HOLD_SCROLL}px` }"
     >
-      <!-- `swipe-rail` is bound rather than static: the shared rule for it in
-           main.css runs to 1023px, and between 992 and 1023 this deck is a
-           deck. Wearing the class there would hand it a scroll-snap flex row to
-           fight the sticky stack with. -->
-      <div
-        ref="deckRef"
-        class="work-deck"
-        :class="{ 'swipe-rail': isRail }"
-        :role="isRail ? 'group' : undefined"
-        :aria-roledescription="isRail ? 'carousel' : undefined"
-        :aria-label="isRail ? 'Selected work' : undefined"
-        :tabindex="isRail ? 0 : undefined"
-        @keydown.arrow-left.prevent="goTo(active - 1)"
-        @keydown.arrow-right.prevent="goTo(active + 1)"
-      >
+      <div ref="deckRef" class="work-deck">
         <template v-for="(project, i) in cards" :key="project.title">
           <div v-if="i === cards.length - 1" data-stack-end aria-hidden="true" class="h-px w-full" />
 
+          <!-- `--last` opts the final card out of the defocus. Every other card
+               blurs because the next one is climbing over it; nothing climbs
+               over this one, so the same rule would blur the card the reader is
+               still looking at. See `work-card-defocus`. -->
           <article
-            class="work-card rounded-[16px] bg-paper px-5 py-6 ring-1 ring-hair md:rounded-[22px] md:px-8 md:py-7"
-            :class="{ 'work-card--peek': isRail && active !== i }"
-            :style="{ '--index': i, zIndex: i + 1 }"
+            class="work-card rounded-[16px] bg-paper p-4 ring-1 ring-hair deck:rounded-[22px] deck:px-8 deck:py-7"
+            :class="{ 'work-card--last': i === cards.length - 1 }"
+            :style="{
+              '--index': i,
+              '--lean': i % 2 ? -1 : 1,
+              '--dim-from': `${defocusRange(i)[0]}%`,
+              '--dim-to': `${defocusRange(i)[1]}%`,
+              zIndex: i + 1
+            }"
           >
             <!-- Three layouts, not two.
 
                  At `xl` the card is a row of three: copy, shot, stack. Below
                  `deck` it is a single column with the shot on top. In between it
-                 is two columns — copy over stack on the left, shot on the right
-                 — and that middle case exists so the deck can keep stacking down
-                 to 992px. A single-column card at this width is about 840px
-                 tall, which is taller than the frame it would have to pin
-                 inside; a two-column one is about 430px, which is not. -->
-            <div class="work-card__grid grid grid-cols-1 items-center gap-4 deck:grid-cols-[minmax(0,1fr)_auto] deck:gap-7 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-8">
+                 is two columns — copy over stack on the left, shot on the right.
+
+                 `deck` is 900px rather than the 992 it was, and what the move
+                 bought is the swipe rail below it going away — see
+                 tailwind.config.ts. The column is not a fallback down there;
+                 it is the better card, and `--shot-cap` is what keeps it short
+                 enough to pin. -->
+            <div class="work-card__grid grid grid-cols-1 items-center gap-3.5 deck:grid-cols-[minmax(0,1fr)_auto] deck:gap-7 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-8">
               <div class="reveal min-w-0 deck:self-end xl:max-w-[270px] xl:self-auto">
                 <div class="flex items-center gap-2.5">
                   <span class="font-data text-[12px] text-steel">{{ String(i + 1).padStart(2, '0') }}</span>
@@ -719,21 +792,25 @@ onBeforeUnmount(() => {
                     {{ project.brand }}
                   </span>
                 </div>
-                <h3 class="mt-3 font-display md:text-xl text-lg font-bold uppercase leading-tight tracking-tight md:text-[25px]">
+                <h3 class="mt-2.5 font-display text-[19px] font-bold uppercase leading-tight tracking-tight deck:mt-3 deck:text-[21px] xl:text-[25px]">
                   {{ project.title }}
                 </h3>
-                <p class="mt-3 text-[13px] leading-relaxed text-steel">{{ project.summary }}</p>
+                <p class="mt-2.5 text-[13px] leading-relaxed text-steel deck:mt-3">{{ project.summary }}</p>
               </div>
 
+              <!-- No `w-full`: below `deck` the box is sized from its height —
+                   see `--shot-cap` — and a stretched grid item would override
+                   that back to the container's width, which is the shape that
+                   made the card too tall to pin in the first place. -->
               <figure
-                class="work-hero order-first w-full overflow-hidden rounded-[12px] bg-paper-soft ring-1 ring-hair deck:order-none deck:col-start-2 deck:row-span-2 deck:row-start-1 deck:w-auto deck:aspect-[3/2] xl:col-start-auto xl:row-span-1"
+                class="work-hero order-first overflow-hidden rounded-[12px] bg-paper-soft deck:order-none deck:col-start-2 deck:row-span-2 deck:row-start-1 deck:aspect-[3/2] xl:col-start-auto xl:row-span-1"
               >
                 <img
                   v-if="project.image"
                   :src="project.image"
                   :alt="`${project.brand} ${project.title} screenshot`"
                   loading="lazy"
-                  class="h-full w-full object-cover object-top max-deck:aspect-[3/2]"
+                  class="h-full w-full object-cover object-top"
                 />
                 <div
                   v-else
@@ -745,43 +822,54 @@ onBeforeUnmount(() => {
 
               <!-- In the two-column case this sits under the copy rather than
                    in a column of its own, which is what keeps the shot's height
-                   the card's height. -->
-              <div class="work-card__foot reveal min-w-0 deck:col-start-1 deck:row-start-2 deck:self-start xl:col-start-auto xl:row-start-auto xl:max-w-[230px] xl:justify-self-end xl:self-auto xl:text-right">
-                <span class="block font-data text-[10px] uppercase tracking-[0.18em] text-steel">Stack</span>
-                <p class="mt-1.5 font-data text-[12px] leading-relaxed text-ink">{{ project.tech }}</p>
+                   the card's height.
 
+                   The `pt` is what separates the spec from the copy in one
+                   column — a hairline rule did that job first, and it is out
+                   because the card carries enough lines already: its own ring,
+                   the shot's edge, the deck edges of the cards behind it. The
+                   space says the same thing without adding a fourth. -->
+              <div class="work-card__foot reveal min-w-0 pt-3.5 deck:pt-0 deck:col-start-1 deck:row-start-2 deck:self-start xl:col-start-auto xl:row-start-auto xl:max-w-[230px] xl:justify-self-end xl:self-auto xl:text-right">
+                <!-- Label beside the value on a phone, above it from `deck` up.
+                     Stacked, the label costs a 17px line to say what the mono
+                     face and the `·` separators already say; inline it is a
+                     data row, which is the voice the rest of the card is in.
+                     Every stack string fits one line at 12px in the narrowest
+                     card this reaches (310px inner at 390px of frame). -->
+                <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 deck:block">
+                  <span class="font-data text-[10px] uppercase tracking-[0.18em] text-steel">Stack</span>
+                  <p class="font-data text-[12px] leading-relaxed text-ink deck:mt-1.5">{{ project.tech }}</p>
+                </div>
+
+                <!-- Unadorned, so the arrow is what marks it as a link. That
+                     leaves it carried by something other than colour alone,
+                     which is the bar an underline was clearing.
+
+                     `active:` rather than only `hover:`: on the surface this is
+                     now the primary presentation for, there is no hover, and a
+                     44px row that does not acknowledge the tap reads as a dead
+                     one for the length of the page load it kicks off. -->
                 <a
                   v-if="project.link"
                   :href="project.link.url"
                   :title="project.link.url"
                   target="_blank"
                   rel="noopener"
-                  class="mt-4 flex min-h-[44px] items-center gap-2 font-data text-[12px] text-ink underline underline-offset-4 transition-colors hover:text-ink/85 xl:mt-6 xl:min-h-0 xl:justify-end xl:pl-4"
+                  class="mt-3 flex min-h-[44px] items-center gap-2 font-data text-[12px] text-ink no-underline transition-[color,opacity] duration-150 ease-out hover:text-ink/85 active:opacity-60 xl:mt-6 xl:min-h-0 xl:justify-end xl:pl-4"
                 >
-                  <span class="min-w-0 truncate">{{ project.link.label }}</span>
+                  <span class="min-w-0 truncate">View</span>
                   <span class="shrink-0" aria-hidden="true">→</span>
                 </a>
-                <p v-else class="mt-2 font-data text-[12px] text-steel">Not listed</p>
+                <p v-else class="mt-3 font-data text-[12px] text-steel">Comming soon</p>
               </div>
             </div>
           </article>
         </template>
 
-        <div aria-hidden="true" class="work-stack-tail hidden deck:block" />
-      </div>
-
-      <div class="swipe-dots">
-        <button
-          v-for="(project, i) in cards"
-          :key="`dot-${project.title}`"
-          type="button"
-          class="swipe-dot"
-          :aria-label="`Show ${project.title}`"
-          :aria-current="active === i ? 'true' : undefined"
-          @click="goTo(i)"
-        >
-          <span />
-        </button>
+        <!-- Visible at every width now that the deck stacks at every width; it
+             was `hidden deck:block` because below 992 there was a rail here and
+             a full-width spacer would have been a seventh slide in it. -->
+        <div aria-hidden="true" class="work-stack-tail" />
       </div>
     </div>
 
@@ -809,6 +897,13 @@ section {
      both ends together — that symmetry is the point, so don't split it back
      into two values. */
   --band: clamp(150px, 22vh, 240px);
+
+  /* How far each card sits below the one it covers, so a covered card keeps a
+     visible edge. A variable rather than the literal it was, because it is
+     spent out of the same budget the shot is — six cards is five of these off
+     the height available to the front card — and on a phone that budget is
+     tight enough that 50px of stagger is worth having back. See `--shot-cap`. */
+  --step: 10px;
 
   /* The hero has to be derived, not chosen, once the insets are symmetric.
      Budget: viewport, less both insets, less the 40px the last card sits
@@ -844,6 +939,102 @@ section {
   }
 }
 
+/* The narrow two-column deck — and the copy is what caps the shot here rather
+   than the height.
+
+   This band used to be a swipe rail; the card is the same two-column object it
+   is at 992, just narrower. Running the 290px cap down here puts a 435px shot
+   against a 205px column of text at 900 — three or four words a line, which is
+   not a column of text, it is a stack of fragments. 200px puts the shot at 300
+   and leaves the copy 410 at the narrow end and ~500 at the wide one.
+
+   The height never binds: at 200px of shot the card is ~300px tall against a
+   band of at most 140, so even a 1024-tall frame has 500px in hand. What binds
+   is the measure, so the cap is a measure decision.
+
+   `svh` from here down, not `vh`: on a phone `vh` is the *large* viewport — the
+   height the frame has only once the browser chrome has retracted — so sizing a
+   deck against it is sizing it against a frame the reader does not have yet, and
+   the first card runs off the bottom for the whole of the first swipe. */
+@media (min-width: 900px) and (max-width: 991px) {
+  section {
+    /* Clears the fixed nav (~84px at this width) with room over it. */
+    --band: clamp(96px, 14svh, 140px);
+    --step: 8px;
+    --hero: max(150px, min(200px, calc(100svh - 2 * var(--band) - 120px)));
+  }
+}
+
+/* The column deck — phones, and portrait tablets, which want the same card.
+
+   Everything here exists to answer one question: is the card shorter than the
+   frame minus the band? If it is, the deck stacks; if it is not, the last card
+   never pins and the section falls apart. This was the question the swipe rail
+   was standing in for. */
+@media (max-width: 899px) {
+  section {
+    --band: clamp(88px, 15svh, 140px);
+    --step: 6px;
+
+    /* The shot's height budget: the frame, less the band it pins under, less
+       everything else the card carries.
+
+       380 is that "everything else", measured at 390px of frame: 317px of card
+       — 14 grid gap, 167 of copy (meta 15, title two lines at 19px, summary
+       four lines at 13px), 14 gap, 90 of foot (hairline, stack row, 44px link),
+       32 of padding — plus the 30px of `--step` the sixth card sits down by,
+       plus ~33 so the card clears the bottom edge rather than grazing it.
+
+       It is spent through the *width* — see `.work-hero` — so that the shot
+       shrinks proportionally when the cap bites rather than being squashed.
+       Capping the height alone leaves a 3:2 screenshot in a 1.7:1 box, which
+       `object-cover` resolves by cutting 13% off each side, and the sides of a
+       screenshot of a website are the parts that say it is a website.
+
+       The 150px floor is for landscape phones, where the arithmetic goes
+       negative; below 500px of frame the deck unstacks anyway, so the floor is
+       only guarding the invalid value, not proposing a usable layout. */
+    --shot-cap: max(150px, calc(100svh - var(--band) - 380px));
+  }
+
+  /* A card is not a container. Left to fill the frame at the top of this
+     range, a single-column card runs the summary to ~130 characters a line —
+     nearly three times a comfortable measure, and the widest text on the page
+     by a distance. 30rem holds it to ~74 and does nothing at all below 512px
+     of frame, where the container is already narrower than the cap.
+
+     It is also what makes the column the right card on a portrait tablet
+     rather than merely a survivable one: 480px of card is 448 of shot, against
+     the 300 the row's shot gets at the same width. */
+  .work-card {
+    max-width: 30rem;
+    margin-inline: auto;
+  }
+
+  /* The height budget spent as a width, which is the only form of it that
+     keeps the ratio.
+
+     Written as `height: var(--shot-cap)` first, with `aspect-ratio` and
+     `max-width: 100%` left to sort the rest out. They don't: `aspect-ratio`
+     only ever derives the dimension you *didn't* state, so it set the width
+     from the height, `max-width` then clamped that width, and the height it was
+     derived from stayed exactly where it was. Measured at 390x844, that is a
+     310x337 box holding a 3:2 shot — a 1.7:1 crop, 13% off each side.
+
+     Stating the width instead leaves the height to be derived, so it is
+     recomputed from whichever of the two limits binds. Above the cap the
+     container wins and the shot is a full-bleed 3:2 block; under it the cap
+     wins and the shot shrinks whole and centres. Either way it is 3:2. */
+  .work-hero {
+    width: min(100%, var(--shot-cap) * 1.5);
+    aspect-ratio: 3 / 2;
+    /* The figure is a grid item and would otherwise stretch, which overrules
+       the width above and restores the full-bleed shot that made the card too
+       tall to pin. */
+    justify-self: center;
+  }
+}
+
 /* Where he stands, so that his boot is on the handover point rather than near
    it.
 
@@ -871,10 +1062,11 @@ section {
   }
 }
 
-/* Cards pile into a deck, each offset 10px below the previous one so the
+/* Cards pile into a deck, each offset `--step` below the one it covers so the
    covered cards keep a visible edge. Purely `position: sticky` — the
    compositor drives it, so it cannot stutter the way a scrubbed transform
-   can. `--index` is set inline per card.
+   can, and it costs nothing on a phone, which is why this is now the
+   presentation at every width. `--index` is set inline per card.
 
    The scroll cost of one card in the deck is its own height plus this gap, so
    the gap is the cheap knob for pacing the deck: it shortens the hand-off
@@ -883,7 +1075,7 @@ section {
    much further and the two events overlap, which reads as a skip. */
 .work-card {
   position: sticky;
-  top: calc(var(--band) + var(--index) * 10px);
+  top: calc(var(--band) + var(--index) * var(--step));
   margin-bottom: 5vh;
   /* Two layers, because one can't do both jobs at this weight. The first is
      the deck's: cast upward, off the top edge, so a card reads as a sheet
@@ -896,10 +1088,11 @@ section {
 }
 
 /* Height-driven so the 3:2 screenshot is never cropped; the width follows.
-   Only applies where the card is a horizontal row — below `deck` it stacks and
-   the image goes full-width, which is why this is a media query and not a
-   plain rule. */
-@media (min-width: 992px) {
+   Only applies where the card is a horizontal row — below `deck` the card is a
+   column and the shot is sized from `--shot-cap` instead, which is why this is
+   a media query and not a plain rule. Kept in step with the `deck` screen in
+   tailwind.config.ts. */
+@media (min-width: 900px) {
   .work-hero {
     height: var(--hero);
   }
@@ -909,11 +1102,17 @@ section {
    only travel inside its containing block, so when the container ended at the
    last card's bottom edge that card reached its offset and immediately kept
    scrolling — every other card holds while the next one covers it, and the
-   rhythm broke at the end. Height matches one card plus the inter-card gap,
-   which is exactly the scroll distance the other cards each hold for. */
+   rhythm broke at the end. Height matches one card, which is exactly the
+   scroll distance the other cards each hold for.
+
+   `--tail` is measured off the last card in script — see `setTail`. The
+   fallback is only what stands here between SSR and hydration, so it is a
+   round number rather than a derivation: the expression that used to live here
+   was `--hero + 56px`, which is the card's height in one of its three layouts
+   and short by ~300px in the one this section now spends most of its traffic
+   in. */
 .work-stack-tail {
-  /* One card: the hero plus the card's vertical padding. */
-  height: calc(var(--hero) + 56px);
+  height: var(--tail, 60svh);
 }
 
 .work-fade {
@@ -980,108 +1179,231 @@ section {
   );
 }
 
-/* Below `deck` the card is a single stacked column (image over text), so there
-   is no deck to pin — a card that shape is about 840px tall, which cannot pin
-   inside a frame shorter than itself — and pinning one on a phone is a
-   scroll-hijack that fights the user anyway.
-   Must stay in step with the deck: prefixes in the template. */
+/* The card arrives askew and straightens as it lands, so it reads as a sheet
+   being laid onto the deck rather than a panel sliding up a track.
+
+   Driven by `animation-timeline: view()` rather than by a scrubbed GSAP
+   tween, and the reason is the same one that made the deck sticky in the
+   first place — see `.work-card`. A view timeline runs on the compositor, so
+   this costs a phone nothing during the one scroll on the page that already
+   has six sticky cards and a tint band on it. A scrubbed transform would put
+   a write on the main thread on every frame of that scroll, which is the
+   trade the whole section was built to avoid.
+
+   Wrapped in `@supports` for the same reason it is worth doing at all: where
+   the timeline doesn't exist the rule is simply absent and the deck is the
+   flat deck it is today. Nothing downstream reads the rotation, so there is
+   nothing to strand.
+
+   `entry 12%` to `entry 92%` is the window the card is *coming in* over: from
+   just after its top edge clears the bottom of the frame to just before it is
+   fully in view. It is straight well before it reaches its sticky offset, so
+   a card is never tilted while it is the one being read.
+
+   A tilt in depth, not a rotation in the plane. The first pass was
+   `rotate()` — the card arrived cocked a degree off square, which is a
+   crooked card rather than a card at an angle to you, and it is the one thing
+   this is explicitly not meant to look like. `rotateX`/`rotateY` under a
+   `perspective()` puts the card on a plane in space instead: the edge that is
+   further away is drawn shorter, so the card reads as leaning back rather than
+   as hung badly. Every edge stays square to every other one the whole way in.
+
+   `--depth` is per-element, inside the transform, rather than a `perspective`
+   property on the deck. The property version would apply one shared vanishing
+   point to all six cards — right for a diorama, wrong here, since a card
+   further down the deck would lean harder than one near the top for no reason
+   the reader can see. It would also make the deck a containing block, which is
+   not a thing to do casually to a stack of sticky elements.
+
+   `--lean` alternates which side recedes, set inline from the index — parity
+   can't be read off `:nth-child` here because the deck also carries the
+   stack-end sentinel and the trailing spacer. Alternating is the other half of
+   keeping the deck flat overall: six cards leaning the same way accumulate into
+   a column that is visibly off-square, where alternating cancels and leaves
+   only the movement.
+
+   Below 1024 only, which is exactly where the ball isn't. The perches measure
+   a card's top edge to stand the ball on it, and `getBoundingClientRect` on a
+   transformed element returns the axis-aligned box. The timing works out (the
+   card is flat before its perch window opens) but "works out" is not a thing to
+   build a measured rig on. */
+@media (max-width: 1023px) {
+  @supports (animation-timeline: view()) {
+    .work-card {
+      /* The tip back, which is the one doing the work: at this depth the top
+         edge is drawn ~4% narrower than the bottom, which is plainly a lean
+         and still leaves the card square. */
+      --tilt-x: 5deg;
+      /* And a little across, so it isn't a perfectly symmetrical hinge. Small,
+         because this is the axis that skews text most on the way in. */
+      --tilt-y: 2deg;
+      /* Long rather than short. Under ~600px the foreshortening stops reading
+         as a lean and starts reading as a fisheye, and the copy goes with it. */
+      --depth: 1000px;
+      /* Bottom-centre, so the card hinges up off the edge it arrives on and
+         looks set down rather than pivoted about its middle. */
+      transform-origin: 50% 100%;
+      /* How soft a card gets once it is all the way under the next one. */
+      --defocus: 5px;
+      animation-name: work-card-settle, work-card-defocus;
+      /* `auto` — the timeline's range is the duration. The `animation`
+         shorthand can't say this: it resets duration to 0s, which is a
+         scroll-driven animation that never advances. */
+      animation-duration: auto, auto;
+      animation-timing-function: linear, linear;
+      /* `backwards`, not `both`. `both` holds the last keyframe forever, and
+         the last keyframe is still a 3D transform — which keeps every settled
+         card on its own composited layer and drops its text from subpixel to
+         greyscale antialiasing for the rest of the page's life. Past the range
+         `backwards` applies nothing at all, so a landed card is an ordinary
+         untransformed box and its copy is rendered the way the rest of the
+         page's copy is. The `from` half still covers the card before it
+         enters.
+
+         `forwards` for the defocus, and the asymmetry is the point: before its
+         range a card carries no `filter` at all — not even `blur(0px)`, which
+         would still cost every card a filter pass and a layer for the whole
+         page — and after it, the blur persists, which is correct, because a
+         card that has been covered stays covered. */
+      animation-fill-mode: backwards, forwards;
+      animation-timeline: view(), view();
+      /* The defocus window is per card and comes in from script — see DEFOCUS
+         in <script setup>, and `work-card-defocus` below for why one shared
+         pair of percentages cannot say this. */
+      animation-range:
+        entry 12% entry 92%,
+        cover var(--dim-from) cover var(--dim-to);
+    }
+
+    /* Nothing climbs over the last card, so it keeps only the settle. Dropping
+       it from the name list is what switches the defocus off — the longhands
+       below still list two values and the extra is simply unused. */
+    .work-card--last {
+      animation-name: work-card-settle;
+    }
+  }
+
+  /* Linear, not eased: the scrubbed clock is the reader's own scroll, and an
+     ease on top of it is a second opinion about how fast they are moving.
+
+     Both keyframes carry the same function list in the same order, so the
+     interpolation runs per function — `perspective` to `perspective`, each
+     rotation to its own zero. Written as a single `from` against the element's
+     underlying `none`, it would have had to go through matrix decomposition,
+     and the identity for `perspective()` is an infinite one. */
+  @keyframes work-card-settle {
+    from {
+      transform: perspective(var(--depth)) rotateX(var(--tilt-x))
+        rotateY(calc(var(--tilt-y) * var(--lean)));
+    }
+    to {
+      transform: perspective(var(--depth)) rotateX(0deg) rotateY(0deg);
+    }
+  }
+
+  /* The card behind goes out of focus as the one in front climbs over it, so
+     the deck reads as depth rather than as sheets of paper at the same
+     distance.
+
+     The window comes from DEFOCUS in <script setup>, one pair per card, and it
+     has to be per card because the obvious derivation is wrong twice over.
+
+     A `view()` range looks like it should be the frame plus the element — 844
+     + 502 = 1346px on a 390x844 phone — and for a card in normal flow it is.
+     For a *sticky* one the range also swallows the whole distance the card
+     spends stuck: card 1's measured range is 4343px, the extra 2997 being its
+     own travel down the deck. So cover% here is mostly a statement about how
+     long a card holds the frame, and every card holds it for a different
+     length. The same physical moment therefore sits at a different percentage
+     on each card's clock. See the table for what that costs.
+
+     The other half of it is subtler: a `view()` timeline on a stuck element
+     keeps advancing while the element sits still. Measured, a stuck card stays
+     frozen at rectTop 127 while its progress climbs 0.23, 0.26, 0.30. That is
+     the only reason this is expressible at all — it means a covered card can be
+     driven off its own timeline. The reading that first suggests itself, "blur
+     when the *next* card arrives", wants the next card's timeline, and CSS
+     cannot reach it: a named timeline is visible to an element's descendants
+     and its following siblings, and the card that needs it is the preceding
+     one. Hoisting six names through `timeline-scope` would work, and is a lot
+     of machinery for a defocus.
+
+     The cost is real and worth stating: `filter` is a repaint, not a
+     composite, so unlike the tilt this cannot ride the compositor. What keeps
+     it cheap is that only one card is ever mid-ramp — the ones already under
+     the deck hold a constant blur, and a constant filter is rasterised once and
+     cached. */
+  @keyframes work-card-defocus {
+    from {
+      filter: blur(0px);
+    }
+    to {
+      filter: blur(var(--defocus));
+    }
+  }
+
+  /* Decoration, and the only thing here that is. Turning it off leaves a flat
+     deck and strands nothing — unlike the ball's timeline, which is why that
+     one is gated on width and not on this. */
+  @media (prefers-reduced-motion: reduce) {
+    .work-card {
+      animation-name: none;
+    }
+  }
+}
+
+/* The band below `deck` is the tint on its own.
+
+   The blur is three stacked `backdrop-filter` layers re-sampling everything
+   behind them every frame, and a phone scrolling a deck of six sticky cards is
+   already the most expensive thing this page does on the weakest hardware it
+   runs on. The tint is a static gradient and costs nothing, and it is the layer
+   doing the actual work anyway: what makes a card read as *surfacing* is that
+   the paper closes over it, not that it goes soft on the way down. */
 @media (max-width: 991px) {
+  .work-fade__blur {
+    display: none;
+  }
+}
+
+/* The two frames with no card in them, where the deck gives up and is a list.
+
+   Everything above sizes the card against the frame. These are the two shapes
+   where no size works, and a deck whose cards are taller than the frame is
+   worse than no deck — the front card never fully arrives, so every card is
+   cut off at the same place and the stacking reads as breakage.
+
+   Under ~500px of height (landscape phones): the band alone is a fifth of the
+   screen, and the card still has a shot, a title, a summary and a 44px target
+   to fit under it.
+
+   Under 360px of width: here it is the *copy* that doesn't fit, which is why
+   there is no height that rescues it. At 320px of frame the measure is 240px,
+   the summary wraps to eight lines and the title to three, and the card is
+   492px tall with the shot already on its 150px floor — 42px past a 568px
+   frame with the shot contributing nothing more to give. Measured on a
+   320x568.
+
+   Width-gated at 1023 on the first of them so it can never reach the ball: the
+   deck's perches are registered under BALL_QUERY (min-width: 1024px), and
+   unstacking underneath them would leave the timeline placing a ball on cards
+   that no longer hold. The second needs no such gate — it is already narrower
+   than anything the ball runs on. */
+@media (max-width: 1023px) and (max-height: 500px), (max-width: 359px) {
   .work-card {
     position: static;
-    margin-bottom: 2.5rem;
-    /* Nothing to lift off here — the cards sit side by side rather than over
-       one another — so only the ambient half of the deck's shadow, which is
-       the half that has to carry it on its own. */
+    margin-bottom: 1.5rem;
+    /* Nothing to lift off once they are a list rather than a stack, so only
+       the ambient half of the deck's shadow — the half that has to carry it on
+       its own. */
     box-shadow:
       0 4px 18px -6px rgba(18, 18, 18, 0.1),
       0 1px 4px -1px rgba(18, 18, 18, 0.06);
   }
 
+  .work-stack-tail,
   .work-fade {
     display: none;
-  }
-}
-
-/* The rail. Must come after the block above so its margin reset wins, and
-   must stay in step with `.swipe-rail` in assets/css/main.css and with
-   RAIL_QUERY in composables/useSwipeRail.ts. */
-@media (max-width: 991px) {
-  .work-deck {
-    /* Matches the container's px-6, so the first card starts on the same
-       margin as the heading over it. */
-    padding-bottom: 1.5rem;
-    --rail-gutter: 1.5rem;
-    /* The card takes 85% of the frame and the cut next to it gets the other
-       15% — the two are the same number, since --rail-item is derived as
-       100% - --rail-peek, so a slide can only be widened by taking it out of
-       the peek. A percentage rather than a rem keeps that split fixed at
-       every width. The 0.875rem gap comes out of the visible cut, so what
-       actually shows of the next card is 15% less about 14px. */
-    --rail-peek: 15%;
-  }
-
-  .work-card {
-    /* The rail spaces the cards; the stacked list's bottom margin would show
-       up as dead width at the end of a horizontal row. */
-    margin-bottom: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Every card but the one holding the frame — in practice the half-cut one
-     at the edge, since it is the only other one on screen. Held back far
-     enough to sit behind the card you are reading and no further: the peek
-     has to stay legible as a card, because looking like the next one is what
-     makes it worth swiping to.
-
-     Set from `active`, not from a scroll position, so it changes on the same
-     signal the dots do and the two can't disagree — see useSwipeRail.ts. */
-  .work-card--peek {
-    opacity: 0.55;
-    transition: opacity 260ms ease;
-  }
-
-  /* Cards are stretched to a common height by the rail, so the slack has to
-     go somewhere, and the last row is where it lands. `items-center` in the
-     template would centre each row in its track, which puts the foot mid-slack.
-  */
-  .work-card__grid {
-    flex: 1;
-    grid-template-rows: auto auto 1fr;
-    align-items: start;
-  }
-
-  /* The slack is split rather than given to one end. The stack follows the
-     summary at the row gap — parking the whole foot on the floor put the
-     difference between the longest summary and the shortest into a hole right
-     under the description — while the link alone takes the leftover and sits
-     on the card's floor, so it lands in the same place on every slide. */
-  .work-card__foot {
-    align-self: stretch;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* The link, or the "Not listed" line standing in for it. `auto` collapses
-     to nothing on the tallest card, which is the one with no slack to spend,
-     so the padding is what guarantees it never closes up on the stack. */
-  .work-card__foot > :last-child {
-    margin-top: auto;
-    padding-top: 1rem;
-  }
-
-  /* Marks a flow position for the blur band, which is an xl-only device. In
-     the rail it would otherwise be a full-width flex item wedged between two
-     cards. */
-  [data-stack-end] {
-    position: absolute;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 991px) {
-  .work-deck {
-    /* Follows the container to md:px-12. */
-    --rail-gutter: 3rem;
   }
 }
 
@@ -1090,5 +1412,9 @@ section {
    ramp below it. Both are gone with the gate — see BALL_QUERY in
    composables/useScrollBall.ts. The deck is driven by BALL_QUERY, which is now
    width-only, so unwinding it on a preference would strand the cards the
-   timeline is still placing. */
+   timeline is still placing.
+
+   Nothing new is owed to the preference by the deck reaching phones, either.
+   A sticky card does not animate; it is where it is, and scrolling is what
+   moves the page past it. */
 </style>
