@@ -85,10 +85,11 @@ interface Cell {
   lattice instead of jumping around it.
 
   Pools are grouped by kind, so a slot reads as one shelf rather than as a
-  random draw: the frameworks tile is always showing a framework. Twenty marks
-  across nine slots.
+  random draw: the frameworks tile is always showing a framework. Nineteen marks
+  across nine slots — the Pinia slot holds only the one, so it sits still while
+  the other eight swap.
 
-  Nineteen of the twenty marks come from svgl.app and are the real thing. GSAP
+  Eighteen of the nineteen marks come from svgl.app and are the real thing. GSAP
   is hand-set — svgl carries no GSAP logo, and GSAP is the one library here the
   site is visibly built out of, so leaving it off the wall was the worse of the
   two options. Its wordmark is drawn with <text> rather than paths, and the font
@@ -105,7 +106,7 @@ const CELLS: Cell[] = [
   { row: 2, col: 1, pool: ['tailwindcss', 'sass'] },
   { row: 2, col: 3, pool: ['gsap', 'vite'] },
   { row: 3, col: 0, pool: [] },
-  { row: 3, col: 2, pool: ['pinia', 'nodejs'] },
+  { row: 3, col: 2, pool: ['pinia'] },
   { row: 3, col: 4, pool: ['git', 'github'] },
   { row: 4, col: 1, pool: ['figma', 'postman'] },
   { row: 4, col: 3, pool: ['claude', 'codex', 'docker'] }
@@ -469,7 +470,7 @@ onBeforeUnmount(() => {
 
         <!-- Decorative in the literal sense: what it shows changes every 1.4s,
              so anything reading it linearly would get an arbitrary snapshot of
-             nine of the twenty. The complete list follows as real text. -->
+             nine of the nineteen. The complete list follows as real text. -->
         <div ref="latticeRef" class="lattice" aria-hidden="true">
           <div
             v-for="(cell, i) in CELLS"
@@ -734,7 +735,7 @@ onBeforeUnmount(() => {
 }
 
 /*
-  Square box, `contain` inside it. The twenty marks arrive at wildly different
+  Square box, `contain` inside it. The nineteen marks arrive at wildly different
   aspect ratios — Nuxt is 256×168, Figma is 54×80 — and sizing on width alone
   would draw the wide ones half again as large as the tall ones. Fitting every
   mark inside the same square is what makes them look like one set.
