@@ -347,21 +347,34 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- The bottom padding is split off from the top rather than written as `py`,
-       so the wordmark below is cut by the end of the page instead of floating
-       above a band of spare black — the cut has to read as the document running
-       out, which is the whole idea.
+  <!-- Bottom padding written separately from the top rather than as `py`, and
+       kept in step with it: `pb-16 md:pb-[120px]` against `pt-16
+       md:pt-[120px]`.
 
-       `pb-0 lg:pb-[120px]` rather than the `max-lg:pb-0` this was: `max-lg` and
-       `md` are both one class of specificity, so between 768 and 1023 the
-       winner is whichever Tailwind happens to emit last, and it emitted
-       `md:py-[120px]`. Measured, that left exactly 120px of black under the cut
-       on a tablet. Stating the floor for everyone and lifting it at `lg` has no
-       such argument to lose. -->
+       It used to be `pb-0 lg:pb-[120px]`, on the reasoning that a zero floor
+       lets the end of the document do the cropping. It does not — the crop is
+       `height: 0.52em; overflow: hidden` on `.footer-mark` below, which holds
+       at any padding, so the floor bought nothing and cost the last row of the
+       page. Measured at 390×844, the bottom of the "Email" link sat exactly 0px
+       from the end of the document: the social row was not tight against the
+       edge, it was clipped by it, with the wordmark clipped through it. Tablet
+       had the same fault and worse balance — `md:pt-[120px]` above and nothing
+       below.
+
+       So the bottom band is stated at every width, and `md` rather than `lg`
+       because that is where the top padding steps and there is no reason for
+       the two to change at different widths. Desktop is unaffected: it was
+       120px at `lg` and is 120px at `md`, which `lg` is inside of.
+
+       The numbers are sized against the mark, which scales with the viewport —
+       its visible band measures 58px at 390, 117px at 768 and 196px at 1440.
+       At 64px and 120px the band holds the whole of that crop on a phone and a
+       tablet, and on a desktop the mark still runs up behind the labels, which
+       is what it has always done and is meant to do. -->
   <footer
     id="contact"
     ref="footerRef"
-    class="relative bg-ink pb-0 pt-16 text-paper md:pt-[120px] lg:pb-[120px]"
+    class="relative bg-ink pb-16 pt-16 text-paper md:pb-[120px] md:pt-[120px]"
   >
     <!-- The name, set as large as the frame allows and run off the bottom of
          the document.
@@ -420,11 +433,11 @@ onMounted(() => {
         </span> -->
       </h2>
 
-      <p class="footer-fade mt-6 max-w-[520px] text-[18px] leading-relaxed text-white/60">
+      <p class="footer-fade mt-6 max-w-[520px] md:text-[18px] text-[14px] leading-relaxed text-white/60">
         hire me to juggle ⚽
       </p>
 
-      <div class="footer-fade md:mt-9 mt-4 flex flex-wrap items-center gap-x-8 gap-y-4">
+      <div class="footer-fade md:mt-9 mt-1 flex flex-wrap items-center gap-x-8 md:gap-y-4 gap-y-10">
         <a
           href="mailto:shejin.abu@gmail.com"
           aria-label="Email Shejin Abu at shejin.abu@gmail.com"
