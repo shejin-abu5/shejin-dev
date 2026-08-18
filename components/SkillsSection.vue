@@ -460,11 +460,9 @@ onBeforeUnmount(() => {
               <ThePlayer move="skills" />
             </div>
           </div>
-
           <p class="mt-7 max-w-[38ch] text-[15px] leading-relaxed text-steel md:text-base">
-            The tools I reach for day to day — the front-end frameworks, the
-            styling and motion layer on top of them, and the AI stack I now build
-            with.
+           The tools I reach for day to day the frameworks, 
+           the styling and motion layer on top of them, and the AI workflow I build with now.
           </p>
         </div>
 

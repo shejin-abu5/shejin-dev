@@ -109,25 +109,30 @@ const { active } = useScrollSpy(links.map((link) => link.id))
     </div>
 
     <div
-      v-show="menuOpen"
-      id="mobile-menu"
-      class="md:hidden mt-5 flex flex-col gap-1 pt-5"
+      class="mobile-menu md:hidden"
+      :class="{ 'is-open': menuOpen }"
+      :inert="!menuOpen || undefined"
     >
-      <a
-        v-for="link in links"
-        :key="link.id"
-        :href="`#${link.id}`"
-        :aria-current="active === link.id ? 'true' : undefined"
-        class="rounded-md px-2 py-2.5 text-sm uppercase tracking-wider transition-colors"
-        :class="
-          active === link.id
-            ? 'font-semibold text-ink'
-            : 'font-medium text-steel hover:bg-paper-soft hover:text-ink'
-        "
-        @click="closeMenu"
-      >
-        {{ link.label }}
-      </a>
+      <div class="mobile-menu-clip">
+        <div id="mobile-menu" class="mt-5 flex flex-col gap-1 pt-5">
+          <a
+            v-for="(link, index) in links"
+            :key="link.id"
+            :href="`#${link.id}`"
+            :aria-current="active === link.id ? 'true' : undefined"
+            :style="{ '--i': index }"
+            class="mobile-link rounded-md px-2 py-2.5 text-sm uppercase tracking-wider"
+            :class="
+              active === link.id
+                ? 'font-semibold text-ink'
+                : 'font-medium text-steel hover:bg-paper-soft hover:text-ink'
+            "
+            @click="closeMenu"
+          >
+            {{ link.label }}
+          </a>
+        </div>
+      </div>
     </div>
   </nav>
 </template>
@@ -162,5 +167,58 @@ const { active } = useScrollSpy(links.map((link) => link.id))
   visibility: hidden;
   font-weight: 600;
   pointer-events: none;
+}
+
+/*
+ * The panel used to be a `v-show`, so it had no opening: `display: none` is not
+ * a state you can transition out of, and the four links simply appeared. It is
+ * a grid collapsed to a zero-height row instead — `0fr` to `1fr` animates
+ * cleanly without anyone having to know how tall four links are, which a
+ * max-height guess would have required. The clip element is what actually
+ * hides the overflow; the grid row is what moves.
+ */
+.mobile-menu {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mobile-menu.is-open {
+  grid-template-rows: 1fr;
+}
+
+.mobile-menu-clip {
+  overflow: hidden;
+}
+
+/*
+ * Colours ride along in the same shorthand rather than Tailwind's
+ * `transition-colors`: two `transition` declarations on one element do not
+ * merge, the later one wins outright, and the hover tint would have taken the
+ * slide with it.
+ *
+ * The stagger lives on `.is-open` only. A transition reads its delay from the
+ * state it is heading towards, so opening deals the links out one at a time
+ * while closing folds them away together — a menu that dismissed itself in
+ * instalments would feel like it was hesitating.
+ */
+.mobile-link {
+  opacity: 0;
+  transform: translateY(-10px) translateX(-8px);
+  transition:
+    opacity 400ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 200ms ease,
+    background-color 200ms ease;
+}
+
+.mobile-menu.is-open .mobile-link {
+  opacity: 1;
+  transform: translateY(0px) translateX(0px);
+  /* One delay per property, in the order the shorthand above lists them:
+     slide, slide, then the two hover colours at 0s. A blanket delay would
+     have held the hover tint back too, so the last link in the column would
+     take 180ms to acknowledge a finger on it. */
+  transition-delay: calc(var(--i) * 60ms), calc(var(--i) * 60ms), 0s, 0s;
 }
 </style>

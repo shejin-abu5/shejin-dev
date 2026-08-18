@@ -8,6 +8,7 @@ import partsImg from '~/assets/img/works/Genuine-Nissan-Parts-GHANA.webp'
 import magniteImg from '~/assets/img/works/magnite.webp'
 import infinitiImg from '~/assets/img/works/infiniti.webp'
 import petrominImg from '~/assets/img/works/Nissan-KSA-Petromin.webp'
+import nismoImg from '~/assets/img/works/patrol-nismo.webp'
 import smartImg from '~/assets/img/works/smart.webp'
 
 interface Project {
@@ -78,14 +79,13 @@ const projects: Project[] = [
   },
   {
     brand: 'Nissan',
-    title: 'Petromin KSA',
-    summary:
-      'Dealer website for Nissan in Saudi Arabia, part of the Middle East rollout with RTL-aware layouts.',
-    tech: 'Vanilla JS · CMS',
+    title: 'Patrol Nismo Microsite',
+    summary: 'Microsite for the Nissan Patrol Nismo in MEA markets, including the Arabic/English RTL layout.',
+    tech: 'Vue · GSAP',
     demoUrl: null,
-    liveUrl: 'https://en.petromin-nissan.com/',
+    liveUrl: 'https://en.patrolnismo.nissan-dubai.com/',
     demoLabel: null,
-    image: petrominImg
+    image: nismoImg
   }
 ]
 
@@ -773,19 +773,27 @@ onBeforeUnmount(() => {
               zIndex: i + 1
             }"
           >
-            <!-- Three layouts, not two.
+            <!-- Two layouts. Below `deck` a single column with the shot on
+                 top; from `deck` up, two columns — copy over stack on the
+                 left, shot on the right.
 
-                 At `xl` the card is a row of three: copy, shot, stack. Below
-                 `deck` it is a single column with the shot on top. In between it
-                 is two columns — copy over stack on the left, shot on the right.
+                 It was three: at `xl` the card used to be a row of *three*,
+                 copy | shot | stack. That layout is gone because the container
+                 it lived in is 1240px wide and site-wide (the section heading
+                 above uses the same one), so the third column could only ever
+                 be paid for out of the shot. It cost 555px of shot beside two
+                 247px columns — the picture at half the card, which is not
+                 what this section is for. Folding the stack back under the
+                 copy widens both of the things that matter: the shot to 759
+                 and the copy to 325.
 
                  `deck` is 900px rather than the 992 it was, and what the move
                  bought is the swipe rail below it going away — see
                  tailwind.config.ts. The column is not a fallback down there;
                  it is the better card, and `--shot-cap` is what keeps it short
                  enough to pin. -->
-            <div class="work-card__grid grid grid-cols-1 items-center gap-3.5 deck:grid-cols-[minmax(0,1fr)_auto] deck:gap-7 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-8">
-              <div class="reveal min-w-0 deck:self-end xl:max-w-[270px] xl:self-auto">
+            <div class="work-card__grid grid grid-cols-1 items-center gap-3.5 deck:grid-cols-[minmax(0,1fr)_auto] deck:gap-7">
+              <div class="reveal min-w-0 deck:self-end">
                 <div class="flex items-center gap-2.5">
                   <span class="font-data text-[12px] text-steel">{{ String(i + 1).padStart(2, '0') }}</span>
                   <span class="font-data text-[10px] uppercase tracking-[0.18em] text-accent-text">
@@ -803,7 +811,7 @@ onBeforeUnmount(() => {
                    that back to the container's width, which is the shape that
                    made the card too tall to pin in the first place. -->
               <figure
-                class="work-hero order-first overflow-hidden rounded-[12px] bg-paper-soft deck:order-none deck:col-start-2 deck:row-span-2 deck:row-start-1 deck:aspect-[3/2] xl:col-start-auto xl:row-span-1"
+                class="work-hero order-first overflow-hidden rounded-[12px] bg-paper-soft deck:order-none deck:col-start-2 deck:row-span-2 deck:row-start-1 deck:aspect-[3/2]"
               >
                 <img
                   v-if="project.image"
@@ -829,7 +837,7 @@ onBeforeUnmount(() => {
                    because the card carries enough lines already: its own ring,
                    the shot's edge, the deck edges of the cards behind it. The
                    space says the same thing without adding a fourth. -->
-              <div class="work-card__foot reveal min-w-0 pt-3.5 deck:pt-0 deck:col-start-1 deck:row-start-2 deck:self-start xl:col-start-auto xl:row-start-auto xl:max-w-[230px] xl:justify-self-end xl:self-auto xl:text-right">
+              <div class="work-card__foot reveal min-w-0 pt-3.5 deck:pt-0 deck:col-start-1 deck:row-start-2 deck:self-start">
                 <!-- Label beside the value on a phone, above it from `deck` up.
                      Stacked, the label costs a 17px line to say what the mono
                      face and the `·` separators already say; inline it is a
@@ -855,7 +863,7 @@ onBeforeUnmount(() => {
                   :title="project.link.url"
                   target="_blank"
                   rel="noopener"
-                  class="mt-3 flex min-h-[44px] items-center gap-2 font-data text-[12px] text-ink no-underline transition-[color,opacity] duration-150 ease-out hover:text-ink/85 active:opacity-60 xl:mt-6 xl:min-h-0 xl:justify-end xl:pl-4"
+                  class="mt-3 flex min-h-[44px] items-center gap-2 font-data text-[14px] font-medium text-ink no-underline transition-[color,opacity] duration-150 ease-out hover:text-ink/85 active:opacity-60 xl:mt-6 xl:min-h-0"
                 >
                   <span class="min-w-0 truncate">View</span>
                   <span class="shrink-0" aria-hidden="true">→</span>
@@ -905,8 +913,13 @@ section {
      tight enough that 50px of stagger is worth having back. See `--shot-cap`. */
   --step: 10px;
 
-  /* The hero has to be derived, not chosen, once the insets are symmetric.
-     Budget: viewport, less both insets, less the 40px the last card sits
+  /* The base derivation, and the one both bands below now override — 900-991
+     with a lower cap, 992-up with a width-led one. Nothing reads this value
+     as it stands, because `.work-hero` only takes a height from `deck` up and
+     both of those bands redefine it; it is kept as the shape the overrides are
+     variations on, and as what `--hero` means if either query is ever narrowed.
+
+     The budget: viewport, less both insets, less the 40px the last card sits
      below the first, less the card's 56px of vertical padding, less 24px so
      that card clears the band instead of grazing it. Capped for tall screens.
 
@@ -921,21 +934,73 @@ section {
   --hero: max(180px, min(370px, calc(100vh - 2 * var(--band) - 120px)));
 }
 
-/* The two-column deck: same derivation, lower cap.
+/* The two-column deck: the shot leads and the height is only its ceiling.
 
-   The shot's width follows its height through the 3:2 aspect, and in two
-   columns whatever it takes comes straight out of the copy beside it. At the
-   full 370px cap that is a 555px shot against a 257px column of text at
-   1000px wide — legible, but the card reads as a screenshot with a caption
-   rather than a project with a picture. 290px puts the shot at 435 and gives
-   the copy back about 120px, which is the difference between two words a line
-   and four.
+   Everywhere else in this file the shot is height-driven and its width falls
+   out of the 3:2 — which here meant a 435px shot beside 400px of copy, near
+   enough an even split. The row is dealt 70/30 instead and the shot takes its
+   width from the track, so the card reads as a project with a picture rather
+   than two columns of equal weight.
 
-   Only in this band: at `xl` the card has a third column and the shot is no
-   longer competing with the copy for the same space. */
-@media (min-width: 992px) and (max-width: 1279px) {
+   `--hero` survives but its job flips: it is no longer the height the width is
+   derived from, it is the ceiling on the height the width derives. Two terms
+   can bind it —
+
+   - `46.67vw - 72.8px` is the 3:2 height of a 70% track. The card's inner
+     width is `min(1240, 100vw) - 128` (the runway's 32px insets, then the
+     card's own) less the 28px grid gap; 70% of that at 3:2 is
+     `(0.7 * (100vw - 156)) / 1.5`.
+   - `506px` is that same number once the runway hits its 1240px cap, which it
+     does from 1304px of viewport up. Past that the card stops growing, so this
+     is the widest the shot is ever asked to be: 759px.
+   - the frame budget, unchanged from what stood here before: viewport, less
+     both insets, less the 120px the card carries around the shot.
+
+   No upper bound on the query, because there is no width at which the third
+   column earned its keep — see the card markup for what was removed and why.
+   The vw term and the 506 term cross exactly where the container caps, so one
+   expression covers 992 to the top.
+
+   The budget is the term that bites on anything shorter than ~910px of frame
+   at the narrow end, ~1105 at 1279, and ~1145 once the container caps — so on
+   any laptop the shot stays 70% wide and goes shorter than 3:2, and
+   `object-cover` against `object-top` spends the difference on the bottom of
+   the screenshot, which is the part of a page that says least. Measured:
+   1.96:1 at 1024x768, 2.31:1 at 1279x800, 2.45:1 at 1366x768 — the most
+   panoramic frame in common use — 1.57:1 at 1920x1080, and exactly 3:2 by
+   2560x1440. Cropping the sides was never on the table (see `--shot-cap`, and
+   the reason there); cropping below the fold is.
+
+   Both ends are held: the sixth card's bottom edge lands 14px above the blur
+   band, which is the clearance the 120px term is there to reserve. Widening
+   the shot's track past 7fr spends that 14px. */
+@media (min-width: 992px) {
   section {
-    --hero: max(180px, min(290px, calc(100vh - 2 * var(--band) - 120px)));
+    --hero: max(
+      180px,
+      min(calc(46.67vw - 72.8px), 506px, calc(100vh - 2 * var(--band) - 120px))
+    );
+  }
+
+  /* 30/70 rather than the `auto` track the column layout uses: an auto track
+     is sized by the figure, and the figure is exactly what wants sizing by the
+     track here. */
+  .work-card__grid {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  }
+
+  /* `width` because the track leads now, and the aspect off because the height
+     no longer follows the width — it is `--hero` from the rule further down,
+     which is the 3:2 height only while the frame can afford it.
+
+     Neither can be left to the grid's default stretch: a grid item carrying an
+     aspect ratio aligns as `start` instead of stretching, so the figure would
+     go on sizing itself off its own height and leave the wide track half
+     empty. This is the one layout where the `w-full` the markup deliberately
+     withholds is the right thing. */
+  .work-hero {
+    width: 100%;
+    aspect-ratio: auto;
   }
 }
 

@@ -286,11 +286,18 @@ const PARK_FADE_BAND = 96
  *
  * Capping the playhead's *speed* separates the two cases cleanly. Below the cap
  * he still tracks the scrollbar frame for frame; above it he simply runs at his
- * own top pace and catches the page up afterwards. 1.5s across the frame is
- * eight strides at a little over five a second — a sprint, which is what he is
- * doing.
+ * own top pace and catches the page up afterwards.
+ *
+ * 2.1s across the frame, not the 1.5 this ran at. 1.5 is eight strides at a
+ * little over five a second, which is a sprint — and a sprint is the wrong read
+ * for what he has just done. He has volleyed the ball away up the page and is
+ * following it; the ball is what the eye is meant to be on, and a figure
+ * crossing the frame in a second and a half pulls it back. At 2.1 the same
+ * eight strides land a shade under four a second, which is a run rather than a
+ * dash, and it leaves the ball the faster thing on screen — which it should be,
+ * having just been kicked.
  */
-const RUN_MIN_TIME = 1.5
+const RUN_MIN_TIME = 2.1
 /**
  * The same floor, for the phone — where the only thing in that timeline is the
  * turn, so this is how long a turn takes at its quickest.
@@ -1377,6 +1384,47 @@ onMounted(() => {
       if (!anchor || !cam) return
 
       /**
+       * Runs a looping cameo only while it is anywhere near the screen.
+       *
+       * The two cameos below are `repeat: -1` timelines on a clock rather than
+       * on the scrollbar, and that much is right: a keepy-up and a tapping foot
+       * are things he does while you are on the page, not things the page does
+       * to him. What it also meant is that they never stopped. Measured at
+       * 1440×900, the skills loop wrote 32 joint transforms a frame and the
+       * footer's tap 17 — on every frame of the whole document, identically at
+       * the top of the hero, one screen down, and in the middle of the page.
+       * Nine tenths of that is spent several viewports from anything that could
+       * see it, and it is spent competing for the frame with the one thing that
+       * is on screen everywhere: the ball. A scrubbed cameo already costs
+       * nothing off-screen, which is why only these two need this.
+       *
+       * Paused rather than killed, and with a full viewport of margin either
+       * side, so he is always already in his rhythm before he can be seen —
+       * a loop that started on entry would be caught standing for the first
+       * frame of every approach. Resuming mid-cycle is the point, not a
+       * side-effect: a figure you glance away from and back to should not have
+       * been waiting on his mark for you.
+       */
+      const whileNear = (tl: gsap.core.Timeline) => {
+        const gate = ScrollTrigger.create({
+          trigger: anchor,
+          start: 'top bottom+=100%',
+          end: 'bottom top-=100%',
+          onToggle: (self) => {
+            if (self.isActive) tl.play()
+            else tl.pause()
+          }
+        })
+        // Read back rather than waited for — a section already on screen at
+        // mount never fires `onToggle`, and must not be left paused.
+        if (!gate.isActive) tl.pause()
+        return () => {
+          gate.kill()
+          tl.kill()
+        }
+      }
+
+      /**
        * A cameo that is waiting rather than playing: he stands and taps a foot.
        *
        * On a clock for the same reason the keepy-up below is — waiting is
@@ -1416,7 +1464,7 @@ onMounted(() => {
           // frame the last one lands.
           .to({}, { duration: Math.max(0.001, T - rise - fall) }, rise + fall)
 
-        return () => idle.kill()
+        return whileNear(idle)
       }
 
       /**
@@ -1464,7 +1512,7 @@ onMounted(() => {
             .to(touch, { y: 0, duration: half * 0.5, ease: 'power2.in' }, half * 1.5)
         }
 
-        return () => keepy.kill()
+        return whileNear(keepy)
       }
 
       /**
@@ -1501,7 +1549,32 @@ onMounted(() => {
 
         const [fx, fy] = cam.contact ?? [CONTACT_X, 1]
 
+        /**
+         * Whether he is close enough to the screen to be worth tracking.
+         *
+         * `follow` is a ticker rather than a scrub, so without this it runs
+         * every frame for the life of the page — and what it does per frame is
+         * two `getBoundingClientRect` calls and, through `seq.progress`, a
+         * rewrite of all twelve joint transforms. That is paid on every frame
+         * the reader spends in the hero, in Selected Work, in the footer:
+         * everywhere except the one section it is animating.
+         *
+         * The cost is worse than the wasted work suggests, because of *what* it
+         * measures. `ballEl` is the page's scroll ball, which its own ticker
+         * writes to in the same frame, and the SVG transforms this writes
+         * dirty layout in turn — so each rect read here forces a synchronous
+         * reflow that the frame then throws away. Two tickers reading and
+         * writing the same layout every frame is the shape of a page that
+         * scrolls smoothly alone and stutters together.
+         *
+         * Half a viewport of margin either side, so tracking is always already
+         * running before any part of him can be seen. This is a frame-budget
+         * measure and must never be a reason for him to be caught standing.
+         */
+        let near = false
+
         const follow = () => {
+          if (!near) return
           const h = host.getBoundingClientRect()
           const b = ballEl.getBoundingClientRect()
           if (!h.width || !b.width) return
@@ -1522,11 +1595,29 @@ onMounted(() => {
           seq.progress(prog)
         }
 
+        // Read back rather than waited for: a trigger already on screen at
+        // mount does not fire `onToggle`, and the `follow()` below has to place
+        // him correctly on a reload that restores its scroll position into this
+        // section.
+        const gate = ScrollTrigger.create({
+          trigger: host,
+          start: 'top bottom+=50%',
+          end: 'bottom top-=50%',
+          onToggle: (self) => {
+            near = self.isActive
+            // One update on the way in, so he arrives already in the pose the
+            // ball's position implies rather than a frame behind it.
+            if (near) follow()
+          }
+        })
+        near = gate.isActive
+
         gsap.ticker.add(follow)
         follow()
 
         return () => {
           gsap.ticker.remove(follow)
+          gate.kill()
           seq.kill()
         }
       }
@@ -1597,15 +1688,38 @@ onMounted(() => {
       // Driven off the section's clock rather than the scrollbar. A ticker
       // rather than a watcher: the value it reads is smoothed per frame, so the
       // only sampling rate that cannot alias it is the frame.
+      //
+      // Gated on proximity for the same reason the tracker above is: a ticker
+      // has no window of its own, so a driven cameo otherwise samples its
+      // section's clock and rewrites twelve joint transforms on every frame of
+      // the whole page, including the several viewports where that section is
+      // nowhere near the screen. The scrubbed branch above needs none of this —
+      // a ScrollTrigger scrub only ticks inside its own window already.
       let drive: gsap.TickerCallback | null = null
+      let gate: ScrollTrigger | null = null
       if (driven) {
-        drive = () => tl.progress(gsap.utils.clamp(0, 1, props.progress!()))
+        let near = false
+        drive = () => {
+          if (!near) return
+          tl.progress(gsap.utils.clamp(0, 1, props.progress!()))
+        }
+        gate = ScrollTrigger.create({
+          trigger: anchor,
+          start: 'top bottom+=50%',
+          end: 'bottom top-=50%',
+          onToggle: (self) => {
+            near = self.isActive
+            if (near) drive!()
+          }
+        })
+        near = gate.isActive
         gsap.ticker.add(drive)
         drive()
       }
 
       return () => {
         if (drive) gsap.ticker.remove(drive)
+        gate?.kill()
         tl.scrollTrigger?.kill()
         tl.kill()
       }

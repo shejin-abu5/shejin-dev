@@ -35,7 +35,7 @@ const INTRO_WORDS = INTRO_SEGMENTS.flatMap((segment) =>
 // caret a full character out of line with the text it is supposed to trail.
 const SLOGAN_SEGMENTS: { text: string; class?: string }[] = [
   { text: 'Develop' },
-  { text: ' * ', class: 'text-accent' },
+  { text: ' ✽ ', class: 'text-accent' },
   { text: "it's necessary", class: 'text-steel' }
 ]
 
@@ -550,9 +550,15 @@ onUnmounted(() => {
               class="hero-mark flex w-[14vw] shrink-0 flex-col justify-end md:w-[9vw]"
               aria-hidden="true"
             >
+              <!-- Invisible on the phone, not absent: the rule is the ball's
+                   perch and the player's aim, and everything about that is
+                   measured off this box (offsetLeft/Width in heroPerchEnd, the
+                   rect in exitX/exitY). Hidden with opacity rather than
+                   `md:block`, so the geometry the scrub and the volley are
+                   built on is the same at every width. -->
               <span
                 :ref="layer === 'ink' ? (el) => (markRef = el as HTMLElement) : undefined"
-                class="block h-px w-full bg-current opacity-25"
+                class="block h-px w-full bg-current opacity-0 md:opacity-25"
               />
             </span>
 

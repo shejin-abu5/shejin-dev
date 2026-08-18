@@ -23,13 +23,15 @@ import { BALL_QUERY, ballClock, ballEntry, ballPerches, type Perch } from '~/com
 // suited all of them and no fraction did either — hence the cap that used to
 // live here. In seconds a landing is just a landing, on every perch.
 //
-// 0.9 rather than the 0.62 this ran at. The shape is two hops under a linear
-// decay, so the figure is halved before it is anything a viewer can read as a
-// bounce: at 0.62 each hop was 0.31s for 18px of rise, which on the work deck —
-// where the ball lands six times, once per card — read as a tick rather than as
-// a ball settling. The deck is what makes it worth slowing: one landing at that
-// pace passes for an impact, six in a row is a stutter.
-const BOUNCE_TIME = 0.9
+// 0.62, and it stays there. It was briefly raised to 0.9 for the work deck,
+// where the ball lands six times in a row — one per card — and each landing at
+// 0.62 reads more as a tick than as a ball settling. That is a fair reading of
+// the deck and the wrong place to answer it: this constant paces every landing
+// on the page, so slowing it re-timed all of them to fix one section. 0.62 is
+// the pace the rest of the page was tuned around. If the deck's run of six
+// wants a heavier settle, it should ask for one on its own perches rather than
+// through the figure everything else shares.
+const BOUNCE_TIME = 0.62
 const BOUNCE_PX = 18
 const SQUASH = 0.12
 
@@ -58,6 +60,73 @@ const REST_CONTACT = 0.12
 // ball is simply somewhere off-screen, and this fades it rather than letting
 // it clip at the edge.
 const FADE_PX = 190
+
+/**
+ * A jump the ball makes that the reader can see.
+ *
+ * The ball is allowed to teleport, and does so constantly: every handover from
+ * one perch to the next that cannot be flown is a cut, and the design covers
+ * them with the edge fades above — a leg that leaves the frame sideways is at
+ * zero opacity by the time its position discontinues, so the jump costs
+ * nothing. That works wherever the cut happens near an edge.
+ *
+ * It does not work anywhere else, and measurement says "anywhere else" happens.
+ * Stepping the page 2px at a time at 1440×900 and reading the ball's settled
+ * position at each stop, two cuts landed in open frame: 109px at full opacity
+ * around scrollY 1916, and 1496px at 0.47 opacity around 12104 — the second
+ * being a ball that crossed the entire viewport while half visible. Those two
+ * are the "jitter and shake"; they are not smoothing artefacts and no amount of
+ * FOLLOW_TAU would have touched them.
+ *
+ * So the fade is made to follow the cut rather than the geometry. The jump is
+ * detected on the frame it happens, *before* that frame is painted, and the
+ * ball is taken to zero and brought back over CUT_FADE. A cut nobody can see
+ * stays a cut nobody can see; one in open frame becomes a blink instead of a
+ * snap, which is what the eye forgives.
+ *
+ * Two conditions rather than one, because raw distance cannot tell a teleport
+ * from a fast flick — on a quick wheel the ball legitimately covers a lot of
+ * ground in a frame. The ratio is what separates them: a roll moves in
+ * proportion to the scroll that drove it, and a cut does not move in proportion
+ * to anything. See the same reasoning under `lastX` for why the spin guard is
+ * explicit instead — it can be, because park() knows when it teleports; this
+ * has to catch the ones nothing announced.
+ */
+const CUT_PX = 80
+const CUT_RATIO = 2.5
+const CUT_FADE = 0.18
+
+/**
+ * How much smaller the ball is once it has left the hero.
+ *
+ * One element rides the whole page, and the page does not want one size. In the
+ * hero it is perched in a headline several hundred px tall and read as the
+ * thing the figure just kicked, so it wants to be substantial. Everywhere below
+ * it shares the frame with the cameos, and they are small: measured at
+ * 1440×900, the cameo heads are 13.8–14.7px across against a 40.3px ball. A
+ * football nearly three times the width of the player's head is the one thing
+ * in this drawing that cannot be read as a football.
+ *
+ * 0.82, and nothing closer to true scale. Matching the heads would put it near
+ * 14px, and at that size it stops working as the page's own marker — it has to
+ * stay findable on a rule at a glance, which is its actual job. So this is a
+ * compromise rather than a correction: clearly smaller than it was is on offer,
+ * smaller than his head is not.
+ *
+ * Tried at 0.72 first, which is 29px at 1440 against a 40px hero ball. That is
+ * the more defensible number on the arithmetic and the wrong one in the frame —
+ * it took the ball far enough down that it stopped reading as the thing being
+ * followed and started reading as a bullet on a rule. 0.82 gives back most of
+ * that (33px) while keeping the shrink obvious next to the hero.
+ *
+ * Ramped rather than switched, over the half viewport after the hero perch's
+ * window closes. `ballR` is contact geometry — surfaces, bounce heights and the
+ * fades all measure against it — so stepping it would be a discontinuity in
+ * exactly the terms CUT_PX exists to catch. Over that distance it changes by
+ * about a hundredth of a pixel per pixel of scroll.
+ */
+const SECTION_SCALE = 0.82
+const SECTION_SCALE_VH = 0.5
 
 // The pace the ball travels at, px of on-screen travel per px of scroll. This
 // is the one number the whole journey is laid out against — see layout().
@@ -98,6 +167,23 @@ const ROLL_SPEED = 0.75
 // A crossing may run a little quicker than a roll — the ball is airborne, and
 // too much hang time reads as float rather than as a hop. Only a little: these
 // were the fast part, and the fix is not to license them.
+//
+// 0.9, and lowering it does as little as lowering ROLL_SPEED does — which is
+// worth recording, because the crossings genuinely *are* the fast part and this
+// is therefore the obvious knob to reach for. Measured end to end at 1440×900,
+// sampling the ball's travel against the scroll that produced it:
+//
+//   CROSS_SPEED   rate p95   jerk p95   visible jumps
+//   0.90            1.64       0.300         0
+//   0.62            1.62       0.353         0
+//   0.45            1.60       0.373         3
+//
+// The pace does not move because these legs are not being priced at this speed
+// in the first place: `layoutRun` pays crossings out of whatever the run's
+// budget has, and on this page that budget binds long before CROSS_SPEED does.
+// Asking for more only takes scroll from the rolls, and past a point that
+// starves them into the ROLL_MIN_RIDE floor — which is what the third row is.
+// The knob that moves a section's pace is the window that section declares.
 const CROSS_SPEED = 0.9
 
 // Least scroll a crossing gets whatever its width, as a fraction of viewport
@@ -166,11 +252,28 @@ const SIDE_LEG_MAX = 1400
 // direction, so reversing swung the ball two thirds of a short card away from
 // the card it was riding. Sections that scrub now hand the ball their own clock
 // instead — see `progress` in useScrollBall.ts — which leaves this responsible
-// only for taking the grain off a plain rail's roll. Short, because lag here
-// buys nothing now: at 720px/s it is ~86px rather than the old 187px, and that
-// is what stops the ball being dropped onto the skills rail while the rail is
-// still below the fold.
-const FOLLOW_TAU = 0.12
+// only for taking the grain off a plain rail's roll.
+//
+// 0.2 rather than the 0.12 that reasoning first produced, and this is the one
+// number on this page that measurably smooths the ball. Sampling every frame of
+// a full-page sweep at 1440×900:
+//
+//   FOLLOW_TAU   jerk mean   jerk p95   worst frame   visible jumps
+//   0.12           0.105       0.369       6.14            1
+//   0.20           0.094       0.390       3.09            0
+//   0.28           0.089       0.368       3.02            0
+//
+// The worst frame is the figure that matters — mean jerk barely moves because
+// most frames are an untroubled roll, and what reads as shake is the handful
+// that are not. Halving the worst one is what takes the lurch out of the perch
+// handovers, and it is also what removes the last jump the fades left visible.
+//
+// Stopping at 0.2 rather than going on to 0.28, where the table flattens: this
+// is lag, and lag is paid everywhere for a benefit collected at a few dozen
+// frames. At 720px/s, 0.2 is ~144px — still under the ~187px this used to run
+// at, which is the figure that had the ball dropped onto the skills rail while
+// the rail was still below the fold.
+const FOLLOW_TAU = 0.2
 
 const ballRef = ref<HTMLElement | null>(null)
 const spinRef = ref<HTMLElement | null>(null)
@@ -242,12 +345,24 @@ onMounted(() => {
     // arriving before it means landing on something that is not on screen yet.
     let declStart: number[] = []
 
-    let ballR = ball.offsetWidth / 2
+    // The ball at full size. `ballR` is this shrunk by the section ramp, and is
+    // what every other line here measures against — see SECTION_SCALE.
+    let baseR = ball.offsetWidth / 2
+    let sizeK = 1
+    let ballR = baseR
     // null means "the ball did not get here by rolling" — a teleport across an
     // off-stage gap, or a refresh. The next frame starts a fresh rotation
     // baseline instead of spinning the ball by the size of the jump.
     let lastX: number | null = null
     let rot = 0
+
+    // Where the ball was painted last frame, and when it last jumped. Separate
+    // from `lastX` because that one is cleared deliberately by park() and this
+    // one must not be — see CUT_PX.
+    let lastVX: number | null = null
+    let lastVY = 0
+    let cutAt = -Infinity
+    let prevSmoothed = window.scrollY
 
     // Horizontal launch point of the fall currently in progress, and which
     // perch it is a fall into. Held rather than re-read because the surface
@@ -319,7 +434,7 @@ onMounted(() => {
     const entered = () => (ballEntry.claimed ? ballEntry.v : intro.v)
 
     const resort = () => {
-      ballR = ball.offsetWidth / 2
+      baseR = ball.offsetWidth / 2
       sorted = ballPerches.list
         .filter((p) => {
           const [a, b] = p.range()
@@ -761,6 +876,14 @@ onMounted(() => {
       measure()
       layout(vh)
 
+      // Shrunk once the hero has handed the ball on — see SECTION_SCALE. Set
+      // before anything reads `ballR`, because everything below measures
+      // contact against it and they all have to agree within a frame.
+      const heroEnd = bounds.length > 1 ? bounds[1] : 0
+      sizeK =
+        1 - (1 - SECTION_SCALE) * clamp01((y - heroEnd) / Math.max(1, vh * SECTION_SCALE_VH))
+      ballR = baseR * sizeK
+
       let i = 0
       while (i < sorted.length && donePerch(i)) i++
 
@@ -1043,17 +1166,6 @@ onMounted(() => {
         }
       }
 
-      // TEMPORARY measurement hook — remove before committing.
-      ;(window as unknown as Record<string, unknown>).__ball = {
-        n: sorted.length,
-        riding,
-        ride: ride.slice(),
-        bounds: bounds.slice(),
-        from: sorted.map((p) => p.from()),
-        to: sorted.map((p) => p.to()),
-        w: widths.slice()
-      }
-
       // Rotation from horizontal displacement actually travelled, which is
       // what reads as rolling.
       //
@@ -1067,10 +1179,25 @@ onMounted(() => {
       if (lastX !== null) rot += ((cx - lastX) / ballR) * (180 / Math.PI)
       lastX = cx
 
-      setX(cx - ballR)
-      setY(cy - ballR)
-      setSY(sy)
-      setSX(1 / sy)
+      // Any jump nothing announced, caught on the frame it happens and before
+      // that frame is painted — see CUT_PX.
+      const dScroll = Math.abs(smoothed - prevSmoothed)
+      prevSmoothed = smoothed
+      if (lastVX !== null) {
+        const moved = Math.hypot(cx - lastVX, cy - lastVY)
+        if (moved > CUT_PX && moved > CUT_RATIO * dScroll) cutAt = clock
+      }
+      lastVX = cx
+      lastVY = cy
+
+      // Placed from `baseR` rather than `ballR`: `x`/`y` are transforms and the
+      // scale below turns about the element's own centre, so the centre is
+      // already where the shrink leaves it. Offsetting by the shrunk radius
+      // instead would move the ball by the difference.
+      setX(cx - baseR)
+      setY(cy - baseR)
+      setSY(sy * sizeK)
+      setSX((1 / sy) * sizeK)
       setSpin(rot)
       // Faded against all four edges, not just the top and bottom. The hero's
       // mark travels a full viewport leftward while the ball rides it, so a
@@ -1082,7 +1209,11 @@ onMounted(() => {
           atRest || homing ? 1 : clamp01((vh - (cy - ballR)) / FADE_PX),
           clamp01((cx + ballR) / FADE_PX),
           clamp01((vw - (cx - ballR)) / FADE_PX)
-        ) * entered()
+        ) *
+          entered() *
+          // Blinked across a cut the edge fades did not already cover. Zero on
+          // the frame of the jump itself, so the jump is never painted.
+          clamp01((clock - cutAt) / CUT_FADE)
       )
     }
 
@@ -1143,8 +1274,8 @@ onBeforeUnmount(() => {
   /* Under the nav's z-100 — the ball passes behind the bar rather than over
      it. Above everything else, including the work deck's blur band. */
   z-index: 90;
-  width: clamp(28px, 2.4vw, 40px);
-  height: clamp(28px, 2.4vw, 40px);
+  width: clamp(32px, 2.8vw, 46px);
+  height: clamp(32px, 2.8vw, 46px);
   border-radius: 9999px;
   background: radial-gradient(circle at 34% 28%, #ffa877, #ff7c3e 40%, #e8551c 76%, #c6420f);
   box-shadow: 0 10px 18px -10px rgba(198, 66, 15, 0.55);
