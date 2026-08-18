@@ -42,6 +42,7 @@ import { BALL_QUERY, useBallPerch } from '~/composables/useScrollBall'
 const PIN_SCROLL = 1400
 
 const sectionRef = ref<HTMLElement | null>(null)
+const headingRef = ref<HTMLElement | null>(null)
 const tileRailRef = ref<HTMLElement | null>(null)
 const lastTileRef = ref<HTMLElement | null>(null)
 const tilesRef = ref<HTMLElement | null>(null)
@@ -289,6 +290,22 @@ const CELLS: Array<[x: number, y: number, opacity?: number]> = [
 ]
 
 /**
+ * How far the word rises as it fades in, in px, and how long it takes.
+ *
+ * The reveal composable's own two figures rather than new ones, and deliberately:
+ * every panel on the site arrives on 46px of rise over 1.3s of `expo.out`, and
+ * this is the backdrop to one of them. Matching it is what makes the stamp and
+ * the card read as one arrival instead of two things that happen to overlap.
+ *
+ * A word 340px tall could carry a great deal more travel than 46px. What that
+ * reads as, at the 0.03 opacity this is set in, is fog drifting rather than a
+ * heading arriving — which is the thing the small number is quietly protecting
+ * against. See composables/useReveal.ts for the argument behind the ease.
+ */
+const HEADING_RISE = 46
+const HEADING_DURATION = 1.3
+
+/**
  * The ball's last two rolling perches on the page.
  *
  * A zero-height rail sitting on the top row's own top line, then the last tile —
@@ -428,6 +445,83 @@ onMounted(() => {
     })
 
     return () => st.kill()
+  })
+
+  /**
+   * The stamp fading up into place.
+   *
+   * A `from`, and that is the one call here worth a note — because the tiles
+   * below make the opposite one and say so at length. Theirs is a staggered set
+   * of six, and a staggered `from` leaves each element at its natural state until
+   * its own slot opens; this is a single element with no stagger, so none of that
+   * applies, and `from` buys something a `fromTo` cannot. It animates *to*
+   * whatever the element already is, and what this element already is, is 0.03.
+   *
+   * That 0.03 is a measured contrast figure with an argument attached to it in
+   * <style>. Writing it into the end of a `fromTo` here would be the same number
+   * in two places, where whoever changes one of them will not find the other.
+   * This reads it out of the CSS instead.
+   *
+   * The hidden state being written here rather than in CSS is the reason the
+   * hero's wipe gives: if this never runs — no JS, an error above it — the word
+   * is a plain stamp at 0.03 rather than a heading faded out of existence.
+   *
+   * Time-based and `once`, unlike the tiles below it. The split is the section's
+   * whole conceit: the furniture — this and the card — arrives on its own clock,
+   * and only the six facts written onto the card are on the reader's.
+   *
+   * `mm.add('all')` because a rise wants no width to itself; it is here for the
+   * revert, which is what `mm.revert()` on unmount then reaches.
+   */
+  mm.add('all', () => {
+    const el = headingRef.value
+    if (!el) return
+
+    // Its own layer for the duration. This paints over the card, the tiles and
+    // the grid at once, so a frame of it is a repaint of everything under it.
+    // Handed back on landing by `clearProps`, as the reveal composable does.
+    gsap.set(el, { willChange: 'transform, opacity' })
+
+    const tw = gsap.from(el, {
+      opacity: 0,
+      y: HEADING_RISE,
+      duration: HEADING_DURATION,
+      ease: 'expo.out',
+      clearProps: 'willChange',
+      scrollTrigger: {
+        trigger: sectionRef.value,
+        /*
+          `center`, not the `top 88%` every other reveal on the site keys off, and
+          the difference is where this element's ink actually is. The others are
+          boxes that start where their content starts, so a line on their top edge
+          is a line on the thing itself. This one is `inset: 0` with the word
+          centred in it: measured at 1440 the section is 670 tall, so the ink sits
+          335px below the box's top and `top 88%` plays the whole arrival 300px
+          under the fold. Which it did — built that way first, and it was over
+          before the word was on screen.
+
+          Off the section's centre, which is the word's centre, at 80% of the
+          fold: the ink stands about 245px tall, so it is wholly in frame with
+          room to spare when it sets off. It also leaves 529px of scroll before
+          the pin at `top top`, so the word is not rising against a section that
+          has already stopped moving.
+
+          After the card, incidentally, rather than before it — the card's own
+          reveal keys off its top edge and so fires ~300px of scroll earlier. That
+          is the right way round for a stamp: the document arrives, and then it is
+          stamped.
+        */
+        start: 'center 80%',
+        // Once. Everything else about this section is furniture that has arrived;
+        // a stamp that re-runs on every scroll back is a tic.
+        once: true
+      }
+    })
+
+    return () => {
+      tw.scrollTrigger?.kill()
+      tw.kill()
+    }
   })
 
   /**
@@ -599,7 +693,7 @@ onBeforeUnmount(() => {
          Before the container in the markup because that is where a heading
          belongs in the reading order; painted over it by `z-index` rather than
          by document order, which is the whole trick — see the style block. -->
-    <h2 class="player-heading">Statistics</h2>
+    <h2 ref="headingRef" class="player-heading">Statistics</h2>
 
     <div class="relative mx-auto max-w-[960px] px-5 md:px-8">
       <div class="reveal player-card">
