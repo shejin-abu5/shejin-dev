@@ -442,6 +442,7 @@ onMounted(() => {
           href="mailto:shejin.abu@gmail.com"
           aria-label="Email Shejin Abu at shejin.abu@gmail.com"
           class="inline-flex items-center gap-3.5 border-b border-white/30 pb-1.5 font-data text-lg transition-colors hover:border-accent hover:text-accent"
+          @click="track('email-click', { where: 'cta' })"
         >
           shejin.abu@gmail.com →
         </a>
@@ -450,6 +451,7 @@ onMounted(() => {
           href="/files/ShejinAbu-26.pdf"
           download="Shejin-Abu-CV.pdf"
           class="inline-flex items-center gap-2 rounded-full bg-paper px-5 py-2.5 font-data text-[13px] text-ink transition-colors hover:bg-accent-text hover:text-white"
+          @click="track('cv-download')"
         >
           Download CV
         </a>
@@ -496,7 +498,7 @@ onMounted(() => {
           </div>
           <div class="text-xs uppercase tracking-wide text-white/50">
             Phone
-            <a href="tel:+971563834835">
+            <a href="tel:+971563834835" @click="track('phone-click')">
             <span class="mt-1.5 block font-data text-[13px] normal-case tracking-normal text-paper">
               +971 56 383 4835
             </span>
@@ -517,13 +519,22 @@ onMounted(() => {
             rel="noopener"
             aria-label="Shejin Abu on LinkedIn (opens in a new tab)"
             class="text-[13px] text-white/60 transition-colors hover:text-accent"
+            @click="track('linkedin-click')"
           >
             LinkedIn
           </a>
+          <!-- `target`/`rel`/`aria-label` brought in line with LinkedIn beside
+               it, which had all three. This one alone opened in the same tab,
+               so the two links next to each other behaved differently for no
+               reason a reader could see — and leaving the portfolio was the
+               unlucky one's outcome. -->
           <a
             href="https://github.com/shejin-abu5"
-            aria-label="GitHub"
+            target="_blank"
+            rel="noopener"
+            aria-label="Shejin Abu on GitHub (opens in a new tab)"
             class="text-[13px] text-white/60 transition-colors hover:text-accent"
+            @click="track('github-click')"
           >
             GitHub
           </a>
@@ -531,6 +542,7 @@ onMounted(() => {
             href="mailto:shejin.abu@gmail.com"
             aria-label="Email Shejin Abu"
             class="text-[13px] text-white/60 transition-colors hover:text-accent"
+            @click="track('email-click', { where: 'footer' })"
           >
             Email
           </a>

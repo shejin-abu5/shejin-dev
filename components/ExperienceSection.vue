@@ -71,7 +71,7 @@ const items: ExperienceItem[] = [
   {
     years: 'Aug 2020 — Present',
     period: 'NOW',
-    role: 'Senior Frontend / UI Developer',
+    role: 'Senior Frontend / UX Developer',
     company: 'Alternative Agency, Dubai, UAE',
     org: 'Alternative Agency',
     summary: 'Lead frontend for automotive CMS platforms across 8+ regional markets.',
@@ -79,7 +79,7 @@ const items: ExperienceItem[] = [
     end: '2026-08',
     current: true,
     bullets: [
-      'Lead frontend development for automotive CMS platforms across 8+ regional markets, including the Vue.js component library used across the Nissan and Ford sites.',
+      'Lead frontend development for automotive CMS platforms across 8+ regional markets, including the Vue.js component library behind the sites of several global automotive brands.',
       'Architect interactive showroom tools and configurators, translating Figma designs into production builds with GSAP and WebGL.',
       'Build multilingual Arabic/English site variants with RTL-aware layouts for KSA, UAE, and North Africa rollouts.',
       'Integrate third-party systems — auth, payments, mapping, CRM — working directly with backend teams on API contracts.'

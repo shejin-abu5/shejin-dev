@@ -1,0 +1,95 @@
+<!--
+  Source for public/og-image.png — the 1200x630 card that Facebook, LinkedIn,
+  WhatsApp, Slack and X render when the site is shared.
+
+  This file exists because it did not. The PNG was previously the only artifact
+  in the repo, so changing a single word in it meant re-deriving the whole
+  layout, palette and type scale from the pixels. It is kept in docs/ rather
+  than public/ deliberately: Nuxt ships public/ verbatim, and this page is a
+  tool for building the asset, not an asset the site serves.
+
+  To regenerate after editing, render at 2x and downscale — the type is small
+  enough that a 1x screenshot renders the mono labels soft:
+
+    render  1200x630 @ deviceScaleFactor 2  ->  2400x1260 PNG
+    sharp   .resize(1200, 630, { kernel: 'lanczos3' })
+            .png({ compressionLevel: 9, palette: true, colours: 128, dither: 0 })
+
+  The palette pass is what keeps this at ~17KB against ~77KB for full colour,
+  and costs nothing visible: the card is flat brand colours on white, so 128
+  entries covers every value plus the antialiasing ramps.
+
+  Output must be exactly 1200x630. app.vue declares ogImageWidth/ogImageHeight
+  as 1200/630 so scrapers that lay the card out before the image arrives pick
+  the large format; ship a file of another size and that declaration is a lie
+  the scrapers act on.
+
+  Colours and fonts track tailwind.config.ts. If the palette moves there, it
+  has to be moved here by hand — nothing links the two.
+-->
+<!doctype html>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;900&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#121212; --paper:#FFFFFF; --accent:#FF4A1F; --steel:#6B6F76; --hair:#E7E5DF; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1200px; height:630px; background:var(--paper); color:var(--ink);
+         font-family:Inter,sans-serif; overflow:hidden; position:relative; }
+
+  .edge { position:absolute; top:0; right:0; width:22px; height:630px; background:var(--accent); }
+  .frame { position:absolute; inset:0 94px 0 70px; display:flex; flex-direction:column; }
+
+  .meta { display:flex; justify-content:space-between; align-items:baseline;
+          font-family:"IBM Plex Mono",monospace; font-size:15px; letter-spacing:.16em;
+          padding-top:64px; }
+  .meta .name { color:var(--ink); font-weight:500; }
+  .meta .where { color:var(--steel); }
+
+  .head { margin-top:52px; font-family:Archivo,sans-serif; font-weight:900;
+          font-size:118px; line-height:.9; letter-spacing:-.022em; }
+  .head .row { display:flex; align-items:center; }
+  .rule { flex:0 0 auto; width:92px; height:2px; background:var(--hair); margin:0 24px 0 20px; }
+  .ui { color:var(--accent); }
+
+  .sub { margin-top:58px; font-size:28px; line-height:1.38; font-weight:400;
+         letter-spacing:-.005em; }
+  .sub .hl { color:var(--accent); }
+
+  .foot { margin-top:auto; padding-bottom:56px; }
+  .foot .hr { height:1px; background:var(--hair); margin-bottom:26px; }
+  .foot .row { display:flex; justify-content:space-between; align-items:baseline;
+               font-family:"IBM Plex Mono",monospace; font-size:15px; letter-spacing:.16em;
+               color:var(--steel); }
+  .foot .sep { color:var(--hair); padding:0 10px; }
+  .foot .star { color:var(--accent); padding:0 7px; }
+</style>
+
+<div class="edge"></div>
+<div class="frame">
+  <div class="meta">
+    <span class="name">SHEJIN ABU</span>
+    <span class="where">DUBAI, UAE&nbsp;&nbsp;·&nbsp;&nbsp;12+ YEARS</span>
+  </div>
+
+  <div class="head">
+    <div class="row">
+      <span>FRONTEND</span><span class="rule"></span><span>/</span><span class="ui">UI</span>
+    </div>
+    <div>DEVELOPER</div>
+  </div>
+
+  <p class="sub">
+    Shaping enterprise and automotive platforms across<br>
+    <span class="hl">the Middle East and Africa.</span>
+  </p>
+
+  <div class="foot">
+    <div class="hr"></div>
+    <div class="row">
+      <span>VUE.JS<span class="sep">/</span>NUXT<span class="sep">/</span>REACT.JS<span class="sep">/</span>TYPESCRIPT</span>
+      <span>DEVELOP<span class="star">✽</span>IT'S NECESSARY</span>
+    </div>
+  </div>
+</div>

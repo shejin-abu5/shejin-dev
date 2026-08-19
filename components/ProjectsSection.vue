@@ -863,6 +863,7 @@ onBeforeUnmount(() => {
                   :title="project.link.url"
                   target="_blank"
                   rel="noopener"
+                  @click="track('project-click', { project: project.title })"
                   class="mt-3 flex min-h-[44px] items-center gap-2 font-data text-[14px] font-medium text-ink no-underline transition-[color,opacity] duration-150 ease-out hover:text-ink/85 active:opacity-60 xl:mt-6 xl:min-h-0"
                 >
                   <span class="min-w-0 truncate">View</span>

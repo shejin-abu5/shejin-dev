@@ -35,6 +35,37 @@ const links = [
 ]
 
 const { active } = useScrollSpy(links.map((link) => link.id))
+
+/**
+ * Read depth, taken from the nav's own scroll spy rather than from a second
+ * observer of its own.
+ *
+ * The question worth answering about a one-page portfolio is how far down it
+ * people actually get — whether the work deck is reached, and whether anyone
+ * arrives at the contact section under their own steam. That is the same
+ * measurement the nav already makes to decide which link to light, so this
+ * reuses the answer instead of installing a parallel scroll listener to
+ * recompute it. Which also means it inherits the two behaviours `useScrollSpy`
+ * was written for and that a naive observer would get wrong here: pinned
+ * sections report the rect they are pinned at, and the footer counts as
+ * reached at the bottom of the document even though its top never crosses the
+ * probe line.
+ *
+ * `seen` makes each section report once per page load. Without it a reader
+ * scrolling up and down the page would file a fresh view every time they
+ * crossed a boundary, which turns a read-depth funnel into a restlessness
+ * metric.
+ *
+ * `active` opens as null and stays null through the hero, so a visitor who
+ * lands and leaves without scrolling sends nothing at all.
+ */
+const seen = new Set<string>()
+
+watch(active, (id) => {
+  if (!id || seen.has(id)) return
+  seen.add(id)
+  track('section-view', { section: id })
+})
 </script>
 
 <template>

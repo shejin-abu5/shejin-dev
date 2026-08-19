@@ -9,18 +9,23 @@ const introRef = ref<HTMLElement | null>(null)
 const sloganRef = ref<HTMLElement | null>(null)
 
 // The bio, cut into runs so the two concrete claims in it — the stack and the
-// brands — can carry the accent while the prose around them stays ink. Two
+// region — can carry the accent while the prose around them stays ink. Two
 // highlights rather than one: they are the only load-bearing facts in the
 // sentence, and colouring the adjectives instead would be decoration.
+//
+// A third run naming the client brands used to sit at the end, commented out.
+// It is gone rather than left dormant: the site no longer names them anywhere
+// in prose — see the meta description in app.vue and the Experience bullet —
+// and a commented-out line is the one form of that copy nobody thinks to
+// update when the decision changes.
 const INTRO_SEGMENTS: { text: string; accent?: boolean }[] = [
-  { text: 'Frontend / UI Developer working in' },
+  { text: 'Frontend / UX Developer working in' },
   { text: 'Vue.js and React.js.', accent: true },
   {
     text:
-      '10+ years shaping enterprise and automotive platforms across the'
+      '12+ years shaping enterprise and automotive platforms across the'
   },
-  { text: 'Middle East and Africa regions.', accent: true },
-  //{ text: "Nissan, Ford and INFINITI.", accent: true }
+  { text: 'Middle East and Africa regions.', accent: true }
 ]
 
 // One span per word is what the scroll wipe animates. Flattened at module

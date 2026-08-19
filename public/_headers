@@ -4,12 +4,21 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()
-  # Cloudflare Web Analytics is injected at the edge, not by the app, so its
-  # beacon has to be allow-listed here or every page load logs a CSP violation
-  # and the analytics silently collect nothing. The beacon script comes from
-  # static.cloudflareinsights.com and reports back to cloudflareinsights.com,
-  # which `connect-src 'self'` does not cover.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  # Two analytics beacons, and each needs naming twice — once in `script-src`
+  # for the tag that loads, once in `connect-src` for the host it reports to,
+  # because they are different hosts in both cases and `connect-src 'self'`
+  # covers neither. Miss either half and the failure is quiet in the worst way:
+  # the site looks perfectly fine, every page load logs a console violation
+  # nobody is watching, and the dashboard just shows no traffic.
+  #
+  #   Cloudflare Web Analytics — injected at the edge rather than by the app,
+  #   so it appears in no source file here. static.cloudflareinsights.com
+  #   serves it, cloudflareinsights.com receives it. Page views and web vitals.
+  #
+  #   Umami — the tag in `nuxt.config.ts`, carrying the custom events from
+  #   `composables/track.ts`. cloud.umami.is is both ends of it. This is the
+  #   one that answers whether anyone downloads the CV.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://cloud.umami.is; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com https://cloud.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
 
 # Hashed build assets are immutable — safe to cache forever.
 /_nuxt/*

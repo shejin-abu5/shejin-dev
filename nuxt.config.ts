@@ -52,6 +52,38 @@ export default defineNuxtConfig({
         },
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'canonical', href: 'https://shejinabu.com/' }
+      ],
+
+      // Umami — page views, plus the custom events fired through
+      // `composables/track.ts` (CV downloads, contact clicks, outbound project
+      // links, read depth). Cookieless and it stores no personal data, which is
+      // what keeps this site free of a consent banner; Cloudflare's own beacon,
+      // allow-listed alongside this one in `public/_headers`, is injected at
+      // the edge and covers page views and web vitals but has no events API at
+      // all, which is the gap this fills.
+      script: [
+        {
+          src: 'https://cloud.umami.is/script.js',
+          // `defer` rather than `async`: nothing on the page reads `window.umami`
+          // during parse — `track()` is only ever called from a click handler or
+          // a post-mount watcher — so there is no reason to let an analytics
+          // script interrupt the first render to execute.
+          defer: true,
+
+          // Public by design. It ships in the served HTML whatever we do with
+          // it, exactly like `siteUrl` above, and it is an identifier for the
+          // dashboard rather than a credential for it — there is no write
+          // access behind it. Not a secret, so not treated as one.
+          'data-website-id': 'REPLACE_WITH_UMAMI_WEBSITE_ID',
+
+          // Delivery is pinned to the production hostname, so the script loads
+          // on the dev server and stays quiet there. Without this every local
+          // reload files a page view and every click made while building a
+          // feature lands in the real numbers — on a portfolio whose genuine
+          // traffic is measured in tens of visits, developer noise would be
+          // most of the dataset.
+          'data-domains': 'shejinabu.com'
+        }
       ]
     }
   },

@@ -28,7 +28,7 @@ const items: ExperienceItem[] = [
     summary: 'Lead frontend for automotive CMS platforms across 8+ regional markets.',
     current: true,
     bullets: [
-      'Lead frontend development for automotive CMS platforms across 8+ regional markets, including the Vue.js component library used across the Nissan and Ford sites.',
+      'Lead frontend development for automotive CMS platforms across 8+ regional markets, including the Vue.js component library behind the sites of several global automotive brands.',
       'Architect interactive showroom tools and configurators, translating Figma designs into production builds with GSAP and WebGL.',
       'Build multilingual Arabic/English site variants with RTL-aware layouts for KSA, UAE, and North Africa rollouts.',
       'Integrate third-party systems — auth, payments, mapping, CRM — working directly with backend teams on API contracts.'
