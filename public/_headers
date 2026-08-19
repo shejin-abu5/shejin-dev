@@ -16,9 +16,15 @@
   #   serves it, cloudflareinsights.com receives it. Page views and web vitals.
   #
   #   Umami — the tag in `nuxt.config.ts`, carrying the custom events from
-  #   `composables/track.ts`. cloud.umami.is is both ends of it. This is the
-  #   one that answers whether anyone downloads the CV.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://cloud.umami.is; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com https://cloud.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  #   `composables/track.ts`. This is the one that answers whether anyone
+  #   downloads the CV, and it takes *three* hosts rather than the two the
+  #   sentence above would suggest: cloud.umami.is serves the tag, and Umami
+  #   Cloud ingests on gateway.umami.is, which appears nowhere in the snippet
+  #   they hand you. Naming only cloud.umami.is is the exact failure this
+  #   comment warns about — measured on the live site 2026-08-19, the script
+  #   loaded 200, `window.umami` was present, and every POST to
+  #   gateway.umami.is/api/send was refused by this header.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://cloud.umami.is; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com https://cloud.umami.is https://gateway.umami.is; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
 
 # Hashed build assets are immutable — safe to cache forever.
 /_nuxt/*
