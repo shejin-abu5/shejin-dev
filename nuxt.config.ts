@@ -74,7 +74,7 @@ export default defineNuxtConfig({
           // it, exactly like `siteUrl` above, and it is an identifier for the
           // dashboard rather than a credential for it — there is no write
           // access behind it. Not a secret, so not treated as one.
-          'data-website-id': '320a0dae-dfda-46ee-940d-c57ca3c18a1c',
+          'data-website-id': '3e38264c-dddc-493c-94b4-f58af675a5ac',
 
           // Delivery is pinned to the production hostname, so the script loads
           // on the dev server and stays quiet there. Without this every local
