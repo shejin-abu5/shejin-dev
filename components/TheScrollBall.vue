@@ -415,6 +415,28 @@ onMounted(() => {
     // Clock reading of the last landing. -Infinity once it has played out, and
     // at rest before the first one.
     let landAt = -Infinity
+    /**
+     * When the resting hop started, or -1 while the ball is not at rest.
+     *
+     * The hop used to be phased straight off `clock`, the page's free-running
+     * timer, so the height it applied on the frame the ball arrived was whatever
+     * that timer happened to be showing — anything up to the full REST_PX, with
+     * the squash jumping to match. Landing therefore ended in a snap: measured
+     * on the footer at 1280×585, cy went 593 to 551 between two consecutive
+     * frames, on a fall that had been moving under 5px a frame the whole way
+     * down. That is the shake at the bottom of the page.
+     *
+     * Phased from the landing instead, t is 0 on the frame the ball touches
+     * down and sin(0) is 0, so the first hop starts from the surface and the
+     * arrival is continuous. It restarts on every arrival, which also means a
+     * small scroll up and back down re-enters at the surface rather than
+     * wherever the timer had got to.
+     *
+     * `landAt` cannot serve here: it is only written when the ball arrives from
+     * a different perch, so a page loaded already at the bottom leaves it at
+     * -Infinity, and a phase taken from that is NaN.
+     */
+    let restAt = -1
     // The last perch the ball actually *rode*, as opposed to fell towards.
     // Changing it is the definition of a landing, and it is deliberately left
     // alone while falling: dithering across a perch's entry line then reads as
@@ -435,6 +457,11 @@ onMounted(() => {
 
     const resort = () => {
       baseR = ball.offsetWidth / 2
+      // Published for the hero's volley, which has to land its own ball at this
+      // size for the swap between the two to read as one ball. Set here rather
+      // than once at mount because the element is a CSS clamp against the
+      // viewport, and a resize refreshes ScrollTrigger, which lands here.
+      ballEntry.r = baseR
       sorted = ballPerches.list
         .filter((p) => {
           const [a, b] = p.range()
@@ -522,6 +549,29 @@ onMounted(() => {
      * depend on the last one's, and a feedback loop running at 60Hz over
      * geometry that is itself moving is how a ball starts to shimmer. A fixed
      * point that is slightly wrong beats a moving one that is exactly right.
+     *
+     * Horizontal only, and that is a known approximation rather than an
+     * oversight: a crossing on this page is mostly a fall, so the ball covers
+     * more ground than this buys it and the legs run quicker than CROSS_SPEED.
+     *
+     * Worth knowing how much quicker, because it is less than it looks from
+     * the geometry here. Sampling the rendered ball position every 5px of a
+     * full-page sweep at 1280×585 — which is the only measurement that counts,
+     * the perch-to-perch distances in this function being read off surfaces
+     * that are not yet in their handover positions — the page runs at a median
+     * of 1.04px of ball per px of scroll, and 1.0 is the ball sitting still
+     * relative to the page. It clears 2.0 for 325px of the 11,500px document,
+     * in two places: the drop onto the work deck and the crossing out of it.
+     * Peak is 2.97.
+     *
+     * Pricing the drop as well was tried, capped at a viewport and at half of
+     * one, and neither is an improvement: this page has no spare scroll, so
+     * every pixel a crossing gains is one its neighbouring rolls lose. At a
+     * full viewport every roll below Skills fell to the ROLL_MIN_RIDE floor —
+     * the ball touching 22% of each rule — and the short hops were still fast,
+     * because the scroll had gone to the long ones. At half, some hops improved
+     * and others got worse. What would actually slow the crossings is more
+     * scroll between the sections they cross, which is not this file's to give.
      */
     const crossWant = (a: number, b: number, vh: number) => {
       const floor = vh * (sorted[a].fall ?? MIN_CROSS_VH)
@@ -532,7 +582,8 @@ onMounted(() => {
 
       // Sideways: the ball rolls out past one edge of the frame and comes back
       // in at the other, so the distance is the two legs, not the gap between
-      // the perches. What happens in between is off-stage and costs nothing.
+      // the perches. What happens in between is off-stage and costs nothing —
+      // including the drop, which is why this branch stays horizontal.
       const dist = sorted[a].side
         ? Math.max(0, window.innerWidth + ballR * 4 - from) + Math.max(0, to + ballR * 4)
         : Math.abs(to - from)
@@ -690,6 +741,13 @@ onMounted(() => {
       // itself past the edge of the frame, so lengthening one costs nothing
       // that anybody sees — where the alternative, spreading it over the run,
       // is a ball that rolls slower than the page reads.
+      //
+      // There is rarely any. Measured end to end at 1280×650, every free run on
+      // this page finishes its shopping with its rolls at exactly ROLL_SPEED,
+      // which is the give-back branch above landing on `need` — so `spare` is
+      // zero and this is doing nothing. Kept because it is what should happen
+      // when a run does have room, and because a page with longer sections
+      // would have some.
       let sumRoll = 0
       for (const v of rollSpan) sumRoll += v
       let sideBonus = 0
@@ -1130,13 +1188,15 @@ onMounted(() => {
       }
 
       let sy = 1
+      if (!atRest) restAt = -1
       if (atRest) {
+        if (restAt < 0) restAt = clock
         // One hop per REST_PERIOD, forever. |sin| is the right shape for it:
         // a cusp at each contact and a rounded apex between, which is what a
         // ball leaving and meeting a surface actually does. A plain sine would
         // ease *into* the floor, and a ball that decelerates on its way down
         // reads as floating.
-        const t = (clock % REST_PERIOD) / REST_PERIOD
+        const t = ((clock - restAt) % REST_PERIOD) / REST_PERIOD
         cy -= REST_PX * Math.sin(t * Math.PI)
         // Squash *is* the contact, so it is measured from the floor rather
         // than from the phase. Distance to the nearer contact — 0 on the
@@ -1251,6 +1311,9 @@ onMounted(() => {
       gsap.ticker.remove(tick)
       ScrollTrigger.removeEventListener('refresh', onRefresh)
       gsap.set([ball, spin], { clearProps: 'all' })
+      // Nobody is catching any more, so the striker stops sizing itself for a
+      // receiver that is not there — see ballEntry.r.
+      ballEntry.r = 0
     }
   })
 })

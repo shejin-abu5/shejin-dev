@@ -387,6 +387,37 @@ const CONTACT_VERT = 260
  */
 const VOLLEY_ARC = 86
 
+/**
+ * How long the struck ball is in the air, in seconds.
+ *
+ * 1.15 rather than the 0.62 this ran at, and the old figure was not a pace so
+ * much as an oversight: the mark it is aimed at can be most of the frame away —
+ * measured at 1920×1080 the flight covers ~1400px — so 0.62s put the ball
+ * across the screen at 2260px/s. That is faster than anything else the page
+ * ever moves, at the one moment the reader is being told what the ball *is*.
+ * The handover is the site's premise; it cannot be the thing you miss.
+ *
+ * Split by width because the distance is: on a phone the headline is a screen
+ * wide rather than two, and the same seconds spent on a third of the travel
+ * read as a lob rather than a strike.
+ *
+ * Long enough to matter for the block below it, too. The chase is scrubbed and
+ * this is on a clock, and both write the same joints — so lengthening this
+ * widens the stretch of scroll they overlap on. See `volleyTl`.
+ */
+const VOLLEY_FLIGHT = 1.15
+const VOLLEY_FLIGHT_PHONE = 0.8
+/** Where the ball leaves the boot, as a position on the volley timeline. */
+const VOLLEY_LAUNCH = 0.06
+/**
+ * The cross-fade between the two balls, centred on the landing.
+ *
+ * Linear at both ends and the same length on each, so what the reader sees holds
+ * a constant strength across it — two `power2` curves crossing sum to less than
+ * one in the middle, which is a ball that dips as it changes hands.
+ */
+const VOLLEY_SWAP = 0.2
+
 let mm: gsap.MatchMedia | null = null
 
 onMounted(() => {
@@ -449,21 +480,32 @@ onMounted(() => {
   /**
    * The far limbs' shading, and the near shade each one resolves to as he turns.
    *
-   * The back arm and back leg are painted a step darker than the front pair,
-   * and that difference is the figure's depth in profile — it is what stops two
-   * legs at the same angle reading as one shape. Facing away it is a lie: both
-   * arms are the same distance from you, so they are the same colour, and a
-   * lingering dark one is the last thing telling you which way he is meant to
-   * be facing. Equalised at the midpoint, the two halves are interchangeable,
-   * which is the whole premise of `backView`.
+   * Both columns are now the same colour, and that is a decision rather than an
+   * oversight. The back arm and back leg used to be painted a step darker than
+   * the front pair, on the reasoning that the difference is the figure's depth
+   * in profile — it is what stops two legs at the same angle reading as one
+   * shape. That is true of a drawing you look at; it is not what happens at the
+   * size this figure is actually read. On a phone he is a fifth of a screen
+   * tall, and a 40-unit step in luminance across a 16px-wide limb does not read
+   * as depth, it reads as a mistake: one hand and one leg tanned, the other
+   * pair not, with nothing in the drawing to explain why. Reported as exactly
+   * that.
+   *
+   * What is lost is real and small — in a pose where both legs land at the same
+   * angle they now merge — and the poses are the place to answer it, since
+   * every one of them already separates the two by angle rather than by tone.
+   *
+   * Kept as pairs rather than deleted so the change is one column wide: put the
+   * darker values back here *and* on the `[data-far]` fills in the template
+   * below, which are the same colours stated as the drawing's starting point.
    */
   const FAR_NEAR: Record<string, [string, string]> = {
-    skin: ['#C99566', '#F2BF95'],
-    shorts: ['#1642AE', '#1B4FD1'],
-    sock: ['#DDDDE2', '#F4F4F6'],
-    band: ['#C08079', '#E8402F'],
-    boot: ['#C6420F', '#FF4A1F'],
-    sleeve: ['#E8E8EC', '#FFFFFF']
+    skin: ['#F2BF95', '#F2BF95'],
+    shorts: ['#1B4FD1', '#1B4FD1'],
+    sock: ['#F4F4F6', '#F4F4F6'],
+    band: ['#E8402F', '#E8402F'],
+    boot: ['#FF4A1F', '#FF4A1F'],
+    sleeve: ['#FFFFFF', '#FFFFFF']
   }
 
   const mixHex = (a: string, b: string, t: number) => {
@@ -655,6 +697,49 @@ onMounted(() => {
 
   if (props.variant === 'hero') {
     /**
+     * The strike, published to the chase below it — and the whole of how the two
+     * are kept off each other.
+     *
+     * They are the hero's two animations of the same rig, and they are built on
+     * opposite principles: the volley is on a clock, because a strike has a
+     * tempo of its own, and the run is scrubbed, because a chase is something
+     * the reader drives. Both write `state`, `root` and the ball, and the note
+     * on the run block claims they never do so in the same frames because the
+     * run starts well after VOLLEY_AT. That is true of the scroll positions and
+     * false of the moments: VOLLEY_AT is 90px and the run's first pose sits at
+     * 0.26 of a ~900px pinned read, so the two are ~140px apart while the volley
+     * lasts most of a second. Any ordinary flick covers that distance inside the
+     * strike, and then three things go wrong at once.
+     *
+     * The ball jitters. Every stride pose carries a `root.y` of −3 to −9, the
+     * rig is the ball's parent, and the ball in flight is positioned in the
+     * rig's own space — so a bob meant for a running figure is added to a ball
+     * that is supposed to be travelling in a clean arc. Measured at 1920×1080,
+     * ~14px of vertical shake at ~4Hz for the rest of the flight.
+     *
+     * The legs twitch, for the plainer reason that two tweens writing one number
+     * in one frame is a fight whose winner is render order.
+     *
+     * And the pose the run rewinds to is wrong from then on. A GSAP tween
+     * records its start values the first frame the playhead reaches it and
+     * replays from those forever — verified — so a run whose first pose is
+     * reached mid-strike records a half-struck figure as the thing it returns
+     * to. Scrolling back to the top then leaves him frozen in it for the rest of
+     * the session, which is most of what "there is a glitch on the way back up"
+     * was.
+     *
+     * So the rig has one owner at a time, and `drive` below is where that is
+     * arbitrated: the playhead may not enter the run while the strike is
+     * animating, and the strike is not played backwards until the playhead has
+     * left. `volleyWanted` is what the scrollbar last asked for, as opposed to
+     * what has been done about it yet.
+     */
+    let volleyTl: gsap.core.Timeline | null = null
+    let volleyWanted = false
+    /** Whether the block that arbitrates the above is mounted at all. */
+    let runOwnsRig = false
+
+    /**
      * Two things vary with width here, at two different breakpoints, and neither
      * line is arbitrary.
      *
@@ -836,9 +921,16 @@ onMounted(() => {
         const box = svg.getBoundingClientRect()
         if (!target || !box.width || !box.height) return { x: 430, y: -40 }
         const m = target.getBoundingClientRect()
+        // Aimed at where the journey's ball will *rest*, which is a radius above
+        // the rule rather than centred on it — the page's ball sits on top of
+        // the surfaces it rides. Aimed at the rule itself the strike landed a
+        // radius low, and the swap then had to cover a 23px vertical step as
+        // well as a change of size. Zero below 1024, where nothing is catching
+        // and the ball stays on the mark it was kicked onto.
+        const rest = noReceiver ? 0 : ballEntry.r
         return {
           x: (m.left + m.width / 2 - box.left) * (240 / box.width),
-          y: (m.top + m.height / 2 - box.top) * (340 / box.height)
+          y: (m.top + m.height / 2 - rest - box.top) * (340 / box.height)
         }
       }
 
@@ -893,6 +985,31 @@ onMounted(() => {
       const flight = { k: 0 }
       const launch = { x: 0, y: 0 }
 
+      /**
+       * How far the struck ball has to come down in size to arrive as the
+       * journey's ball, resolved against the screen rather than picked.
+       *
+       * The two are drawn by different rules — this one is RIG.ballR in a 240
+       * viewBox scaled to however wide the figure is, the other a CSS clamp on
+       * the viewport — so their ratio is only knowable at runtime, and it is not
+       * close to 1: 35px against 23px at 1920×1080. Left alone, the cross-fade
+       * has a ball a third larger dissolving into one a third smaller, which is
+       * the "pop" at the moment it arrives in the headline rather than anything
+       * moving badly.
+       *
+       * Falls back to 1 wherever there is nothing to match — below 1024, and on
+       * any frame before TheScrollBall has measured itself.
+       */
+      const shrink = () => {
+        const box = svg.getBoundingClientRect()
+        if (noReceiver || !ballEntry.r || !box.width) return 1
+        return gsap.utils.clamp(0.3, 1, ballEntry.r / (RIG.ballR * (box.width / 240)))
+      }
+
+      const flightTime = phone ? VOLLEY_FLIGHT_PHONE : VOLLEY_FLIGHT
+      /** When the ball is on the mark, as a position on this timeline. */
+      const landAt = VOLLEY_LAUNCH + flightTime
+
       volley
         .add(poseTl('volley', 0.24, 'power3.out', false), 0)
         // The strike's own squash — and the only thing that hands the ball back
@@ -935,7 +1052,7 @@ onMounted(() => {
           flight,
           {
             k: 1,
-            duration: 0.62,
+            duration: flightTime,
             ease: 'none',
             onStart: () => {
               launch.x = gsap.getProperty(ball, 'x') as number
@@ -959,10 +1076,10 @@ onMounted(() => {
               })
             }
           },
-          0.06
+          VOLLEY_LAUNCH
         )
-      // The swap, at the moment of arrival and over the same tenth of a second,
-      // so the two balls are never both visible and never both gone.
+      // The swap, centred on the arrival and over the same band at both ends, so
+      // the two balls are never both visible and never both gone.
       //
       // Skipped entirely where there is no second ball to swap to. Below 1024
       // this used to run anyway: the strike landed on the mark, the ball faded
@@ -972,8 +1089,18 @@ onMounted(() => {
       // and the receiver was gated off.
       if (!noReceiver) {
         volley
-          .to(ball, { opacity: 0, duration: 0.12, ease: 'none' }, 0.64)
-          .to(ballEntry, { v: 1, duration: 0.16, ease: 'power2.out' }, 0.62)
+          // Down to the receiver's size over the flight, starting where the
+          // release above finishes so the two are never writing one scale in the
+          // same frame. `sine.inOut` because a ball does not change size and
+          // there is nothing here to read as an event — the shrink has to be
+          // something you notice only by it having already happened.
+          .to(
+            ball,
+            { scaleX: shrink, scaleY: shrink, duration: flightTime - 0.18, ease: 'sine.inOut' },
+            VOLLEY_LAUNCH + 0.18
+          )
+          .to(ball, { opacity: 0, duration: VOLLEY_SWAP, ease: 'none' }, landAt - VOLLEY_SWAP / 2)
+          .to(ballEntry, { v: 1, duration: VOLLEY_SWAP, ease: 'none' }, landAt - VOLLEY_SWAP / 2)
       }
 
       // And he settles back to standing, watching it go.
@@ -1087,16 +1214,30 @@ onMounted(() => {
       // position the old viewport implied.
       const volleyAt = () => props.volleyAt?.() ?? VOLLEY_AT
 
+      volleyTl = volley
+
       const st = ScrollTrigger.create({
         trigger: document.documentElement,
         start: volleyAt,
         end: () => volleyAt() + 1,
-        onEnter: () => volley.play(),
-        onLeaveBack: () => volley.reverse()
+        onEnter: () => {
+          volleyWanted = true
+          volley.play()
+        },
+        // Recorded rather than acted on. Going back up he has a run to undo
+        // before there is a strike to undo, and `drive` below is the only thing
+        // that knows when that is finished — see `volleyTl`. Where that block is
+        // not mounted there is nothing to wait for and this reverses on the spot.
+        onLeaveBack: () => {
+          volleyWanted = false
+          if (!runOwnsRig) volley.reverse()
+        }
       })
 
       return () => {
         if (park) gsap.ticker.remove(park)
+        volleyTl = null
+        volleyWanted = false
         // Handed back to its own clock, so a resize across 1024 does not leave
         // the desktop's ball frozen at whatever timeScale the phone's headline
         // last asked for.
@@ -1285,6 +1426,20 @@ onMounted(() => {
       // allowed to skip for free. See the note in `drive`.
       const head = phone ? TURN_AT : FROM
 
+      /**
+       * A hair short of `head` — where the playhead is held while the strike
+       * owns the rig, and deliberately not `head` itself.
+       *
+       * The difference is the whole point. A GSAP tween records its start values
+       * the first frame the playhead *reaches* it and replays from those on
+       * every rewind afterwards, so parking on `head` exactly renders the first
+       * pose of the run at ratio 0 and freezes whatever the volley happened to
+       * be drawing as the figure this timeline returns to. Stopping just short
+       * of it leaves that first render on the far side of the lock, which is
+       * where it belongs: the run's start is the pose the strike settles into.
+       */
+      const headHold = head - 1e-4
+
       // Whether the playhead has been put somewhere yet. A reload part-way down
       // the page restores its scroll position before this mounts, so the first
       // frame is a placement rather than a move — capped like any other it
@@ -1293,19 +1448,49 @@ onMounted(() => {
       let placed = false
 
       const drive = (_time: number, deltaMs: number) => {
+        const volley = volleyTl
+
+        // Coming back up, the strike is played backwards only once the playhead
+        // is clear of everything this timeline has scheduled — he runs back to
+        // his mark, and *then* the ball comes off the headline to meet him.
+        // Fired from here rather than from the volley's own trigger because that
+        // trigger is 90px down the page while the playhead can still be two
+        // seconds of run away from the top. See `volleyTl`.
+        if (volley && !volleyWanted && volley.progress() > 0 && !volley.reversed() && p <= head) {
+          volley.reverse()
+        }
+
+        // And in both directions the playhead stays out of the run while the
+        // strike is animating. `isActive` rather than a progress test so a
+        // volley that never fired — a reload part-way down the page enters below
+        // its trigger — cannot lock the run out for the whole session.
+        const locked = !!volley && volley.isActive()
+
         const target = st.progress
         if (!placed) {
           placed = true
           p = target
+          // A reload part-way down the hero starts the read past everything the
+          // strike is about, and the two would otherwise play out over each
+          // other on the first second of the page. Where the playhead lands
+          // inside the run, the strike has already happened — so it is put
+          // where the scrollbar says it is, and *before* the placement below,
+          // which is the frame the run records the pose it returns to.
+          if (volley && p > head && volley.progress() < 1) {
+            volleyWanted = true
+            volley.progress(1)
+          }
           run.progress(p)
           return
         }
-        if (target === p) return
+        if (target === p && !locked) return
 
         // Clamped for the same reason the ball's follow is: a backgrounded tab
         // hands over one enormous delta on return, and a step taken from it
         // would be exactly the teleport this exists to prevent.
         const dt = Math.min(deltaMs / 1000, 0.05)
+        // Where the playhead started this frame, for the gate at the foot of it.
+        const was = p
 
         // Nothing is scheduled before `head` — he is stood still there,
         // watching the volley go — so the playhead crosses that stretch at
@@ -1326,12 +1511,24 @@ onMounted(() => {
             ? target
             : p + gsap.utils.clamp(-cap, cap, d * (1 - Math.exp(-dt / RUN_TAU)))
 
+        // A gate, not a leash: the lock stops the playhead advancing into the
+        // run while the strike is animating, and never drags it back from where
+        // it already is. The distinction matters for exactly one case — a reload
+        // part-way down the hero, where the playhead is legitimately at the far
+        // end of the read and yanking it to the start of the run would be the
+        // snap this whole arrangement exists to remove.
+        if (locked) p = Math.min(p, Math.max(was, headHold))
+
         run.progress(p)
       }
 
+      // Announced last, so the volley's own trigger only defers to this once it
+      // is actually running — see `runOwnsRig`.
+      runOwnsRig = true
       gsap.ticker.add(drive)
 
       return () => {
+        runOwnsRig = false
         gsap.ticker.remove(drive)
         st.kill()
         run.kill()
@@ -1854,11 +2051,11 @@ onBeforeUnmount(() => {
              as a stump. They finish just onto the thigh, which is where arms
              finish. -->
         <g data-j="armB" data-o="114 124">
-          <rect data-far="skin" x="105" y="115" width="18" height="58" rx="9" fill="#C99566" />
-          <rect data-far="sleeve" x="104" y="114" width="20" height="34" rx="10" fill="#E8E8EC" />
+          <rect data-far="skin" x="105" y="115" width="18" height="58" rx="9" fill="#F2BF95" />
+          <rect data-far="sleeve" x="104" y="114" width="20" height="34" rx="10" fill="#FFFFFF" />
           <g data-j="forearmB" data-o="114 164">
-            <rect data-far="skin" x="106" y="156" width="16" height="58" rx="8" fill="#C99566" />
-            <circle data-far="skin" cx="114" cy="206" r="9" fill="#C99566" />
+            <rect data-far="skin" x="106" y="156" width="16" height="58" rx="8" fill="#F2BF95" />
+            <circle data-far="skin" cx="114" cy="206" r="9" fill="#F2BF95" />
           </g>
         </g>
 
@@ -1907,7 +2104,7 @@ onBeforeUnmount(() => {
            appearing and disappearing at the top of the thigh through the middle
            of every juggle, and the same thing a size smaller at each knee. -->
       <g data-j="legB" data-o="120 200">
-        <rect data-far="skin" x="105" y="185" width="30" height="89" rx="15" fill="#C99566" />
+        <rect data-far="skin" x="105" y="185" width="30" height="89" rx="15" fill="#F2BF95" />
         <!-- The shorts leg: a semicircle centred on the hip, straight sides, and
              a flat hem. Rounded at the top because it turns with the thigh and
              has to stay on it, square at the bottom because a hem is square —
@@ -1918,18 +2115,18 @@ onBeforeUnmount(() => {
              a depth cue; on the shorts that cue is carried by the colour alone,
              because two hems two units apart leave a visible step down the
              middle of him at the one moment the two are side by side. -->
-        <path data-far="shorts" d="M103 200a17 17 0 0 1 34 0v32h-34z" fill="#1642AE" />
+        <path data-far="shorts" d="M103 200a17 17 0 0 1 34 0v32h-34z" fill="#1B4FD1" />
 
         <g data-j="shinB" data-o="120 259">
-          <rect data-far="skin" x="107" y="246" width="26" height="77" rx="13" fill="#C99566" />
-          <path data-far="sock" d="M107 283h26v27a13 13 0 0 1-26 0z" fill="#DDDDE2" />
-          <rect data-far="band" x="107" y="287" width="26" height="8" fill="#C08079" />
+          <rect data-far="skin" x="107" y="246" width="26" height="77" rx="13" fill="#F2BF95" />
+          <path data-far="sock" d="M107 283h26v27a13 13 0 0 1-26 0z" fill="#F4F4F6" />
+          <rect data-far="band" x="107" y="287" width="26" height="8" fill="#E8402F" />
 
           <g data-j="footB" data-o="120 310">
             <path
               data-far="boot"
               d="M107 310a13 13 0 0 1 26 0v6l23 2c6.8.6 10.6 3.9 10.6 8.6v1.5c0 2.4-1.9 4.3-4.3 4.3h-55.8c-3.9 0-7-3.1-7-7z"
-              fill="#C6420F"
+              fill="#FF4A1F"
             />
             <rect x="112" y="306" width="4" height="14" rx="2" fill="#F0EDE6" opacity="0.45" />
           </g>

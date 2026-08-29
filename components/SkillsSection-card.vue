@@ -1,9 +1,23 @@
 <script setup lang="ts">
 import { gsap } from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { useReveal } from '~/composables/useReveal'
-import { BALL_QUERY, useBallPerch } from '~/composables/useScrollBall'
 import { useSwipeRail } from '~/composables/useSwipeRail'
+
+/*
+  The nine flip cards, and nothing else.
+
+  This was the whole Skills section once — heading, rule, footballer, pin and
+  all — before the section became the tool lattice at SkillsSection.vue. It was
+  kept afterwards as a verbatim archive of the old design, and it is now live
+  again in a smaller role: the lattice answers "what does he build with?" at a
+  glance, and this is what opens behind its View more button, in a drawer.
+
+  So everything the old section owned as a *section* is gone from here — the
+  `id`, the heading block, ThePlayer, both ball perches and the scroll pin. All
+  five belong to the page's scroll, and this now renders inside a fixed panel
+  where there is no page scroll to hang them on. What is left is what the flip
+  was always about: nine categories, fifty-odd chips, one turn each.
+*/
+
 
 interface SkillCard {
   category: string
@@ -25,8 +39,12 @@ interface SkillCard {
 // loading are CV "Performance & Build Tools", and sit under Build tools);
 // experience bullets (Vue Material and Ionic 4, Golden Star Media); and the
 // practices the work itself demonstrates (ScrollTrigger drives every reveal in
-// this repo, per plugins/gsap.client.ts). Nothing is a tool never used —
-// Redux and Vite stay out, as neither appears anywhere in the CV.
+// this repo, per plugins/gsap.client.ts). Nothing is a tool never used.
+//
+// State management is the one card that runs past its CV line rather than
+// short of it. The CV reads just "Pinia, Vuex"; Redux, Redux Toolkit,
+// Zustand and TanStack Query were named directly instead of sourced from it,
+// so this list is ahead of that document rather than derived from it.
 //
 // No chip repeats across cards, so nine backs read as nine lists rather than
 // one list shuffled. That is what sends HTML5 to Languages while Semantic HTML
@@ -49,7 +67,7 @@ const cards: SkillCard[] = [
       'M5 6v12c0 1.4 2.9 2.5 7 2.5s7-1.1 7-2.5V6',
       'M19 12c0 1.4-2.9 2.5-7 2.5S5 13.4 5 12'
     ],
-    stack: ['Pinia', 'Vuex', 'Redux', 'Reactive stores']
+    stack: ['Pinia', 'Vuex', 'Redux', 'Redux Toolkit', 'Zustand', 'TanStack Query', 'Reactive stores']
   },
   {
     category: 'Styling',
@@ -109,38 +127,6 @@ const cards: SkillCard[] = [
 
 const CHEVRON = 'm6 9.5 6 6 6-6'
 
-const sectionRef = ref<HTMLElement | null>(null)
-const railRef = ref<HTMLElement | null>(null)
-/**
- * How much scroll the section is held for while he keeps the ball up.
- *
- * Short, and deliberately shorter than the other pins on the page: this is one
- * trick on a loop, so it needs long enough to read as juggling — three or four
- * touches — and no longer. The perch below is given the identical range, which
- * is what stops the ball leaving while he is still working.
- */
-const PIN_SCROLL = 620
-
-/**
- * Where the section comes to rest, and it is not flush with the top of the
- * frame.
- *
- * He sits near the section's own top edge, so pinning at `top top` held his
- * head 144px down the viewport — and the ball he is keeping up sits above that
- * again, which puts it inside the ball's top fade band (FADE_PX, 190px). It
- * spent the whole trick at 84% opacity for no reason anybody could see.
- *
- * Holding 140px lower costs nothing — the heading is still comfortably in frame
- * — and puts the ball's whole arc clear of the band.
- */
-const PIN_START = 'top top+=140'
-
-/** The player's own contact surface — resolved out of his SVG once mounted. */
-const playerRef = ref<HTMLElement | null>(null)
-const touchRef = computed<HTMLElement | null>(
-  () => (playerRef.value?.querySelector('.p-touch') as HTMLElement | null) ?? null
-)
-
 // Below lg the grid is a swipe rail, the same as Work and Experience — see
 // composables/useSwipeRail.ts. One card per slide: at ~326px the card is back
 // to the width it has in the desktop grid, so it carries its full front and
@@ -194,267 +180,122 @@ function toggle(i: number) {
     )
 }
 
-// Ends well before the rule leaves the frame, so there is room below it for a
-// real handoff into Education rather than a cut. `to` shortens the roll to
-// match, keeping the pace the same as Selected Work's rule.
-useBallPerch(() => railRef.value, {
-  trigger: () => railRef.value,
-  // In frame at both ends. At 104% the ball landed on a rule still below the
-  // fold; 92% lands it on one you can see.
-  start: 'top 92%',
-  // Runs almost to the pin. The crossing from here to his boot is paid for out
-  // of whatever scroll is left between the two, so ending this roll early does
-  // not get the ball to him sooner — it just buys the hop a longer, emptier
-  // arc. At `top 34%` the ball did not reach his feet until 300px into a 620px
-  // pin, which is half the hold spent watching him juggle nothing.
-  end: 'top 8%',
-  // Lands halfway along and leaves from the far end — the opposite of what
-  // this used to do, and for the same reason it used to do the opposite.
-  //
-  // The thinking before was that leaving from the middle shortened the
-  // crossing to Education. It does not: that crossing goes off the right edge
-  // of the frame and comes back in at the left, so its length is the distance
-  // to the *right* edge plus the distance from the left, and stopping short of
-  // the right-hand end makes the first of those longer, not shorter. Measured
-  // at 1920: leaving at 0.5 costs 1694px of travel, leaving at 0.92 costs
-  // 1212px. The rule the ball gives up rolling across it gets back on the way
-  // out.
-  //
-  // Landing at 0.5 rather than 0 shortens the crossing *in* from the chart,
-  // which ends on the right-hand side of the frame — the ball no longer has to
-  // cross the whole width of the page to reach the start of this rule.
-  // Lands most of the way along rather than halfway. A roll is paid for at a
-  // fixed speed, so its length decides *when* it ends: from 0.5 the ball was
-  // still crossing the rule for the first 300px of the pin — a third of the
-  // hold spent watching him alternate his feet at nothing while it caught up.
-  // From here the roll is a third as long and he has the ball almost as soon as
-  // the section stops.
-  from: 0.68,
-  // The far end of the rule is where he is sitting, so this roll now ends at
-  // his boot rather than at the edge of the frame. The number is unchanged —
-  // what changed is what is there: the rule carries the ball to him, and the
-  // sideways exit below has moved onto his perch with it.
-  to: 0.9,
-  // Sideways, for the same reason Selected Work's rule is: this rule sits
-  // under the section *heading*, and the next perch is Education's hairline
-  // the better part of a viewport and a half below it — with all nine skill
-  // cards in between.
-  //
-  // Arced, that gap was not survivable. Both ends of a fall are read live, and
-  // over a gap that long the departure point does not merely move, it leaves:
-  // the rule climbs a full screen out of the frame at the page's own speed
-  // while the target is still coming up from below. The arc is anchored to
-  // whichever dominates, so the ball ran off the top of the screen with the
-  // rule, hung there, then came back down onto Education at roughly twice
-  // scroll speed to make up the difference. That is the jump.
-  //
-  // Off the edge and back in at the other side, there is no departure point
-  // left to be dragged by — and the skill grid is content the ball has no
-  // business rolling over anyway.
-  //
-  // That exit now belongs to the perch below rather than to this one: the ball
-  // does not leave Skills off this rule, it leaves off his boot.
-  fall: 0.1
-})
+/*
+  The entry stagger.
 
-/**
- * His feet, while he keeps the ball up.
- *
- * The surface is a rect inside the player that traces the ball's arc, animated
- * on the same timeline that alternates his feet — so the ball rises and falls
- * because the thing it is perched on does, and it meets a boot each time it
- * comes down. See `.p-touch` in ThePlayer.vue.
- *
- * `from` and `to` are the same point: he is keeping it up on the spot, not
- * carrying it anywhere. All the movement is the surface's.
- */
-useBallPerch(() => touchRef.value, {
-  // The section, over exactly the pin's range — not the rule, and not his own
-  // box. Struck against the rule, the window ran from `top 40%` to `top -30%`,
-  // which is to say it *ended with the rule a third of a screen above the top
-  // of the frame*: he did the whole trick on his way out of view, and by the
-  // time the ball was on his feet he was leaving. Pinned and given the pin's
-  // own range, he holds still and the ball stays with him for all of it.
-  trigger: () => sectionRef.value,
-  start: PIN_START,
-  end: `+=${PIN_SCROLL}`,
-  from: 0.5,
-  to: 0.5,
-  inset: 0,
-  // The sideways exit, inherited from the rule above. Education's hairline is
-  // most of two viewports below with the whole skill grid in between, and an
-  // arc over that has no departure point left to be anchored to — see the note
-  // on the rule's own perch.
-  side: true
-})
+  The cards used to carry `.reveal` and be flown in by useReveal, which is a
+  ScrollTrigger batch keyed to where each card sits in the page. Inside a fixed
+  drawer there is no such position to key on — the batch would fire all nine at
+  once on open, or never. So the drawer's own opening is the trigger now: this
+  component is mounted by `v-if` at the moment the panel opens, and the stagger
+  below runs once against that.
 
-let pinMedia: ReturnType<typeof gsap.matchMedia> | null = null
-
+  Kept near useReveal's own numbers — same expo.out, same long tail — so the
+  cards arrive the way everything else on the page does, over a shorter
+  distance, since they are travelling into a panel rather than up from below
+  the fold.
+*/
 onMounted(() => {
-  useReveal(sectionRef.value)
+  const el = gridRef.value
+  if (!el) return
 
-  pinMedia = gsap.matchMedia()
-
-  /**
-   * Holds the section still while he keeps the ball up.
-   *
-   * Without it the trick happened on a section travelling past at the page's
-   * own speed, and the ball left with it — the touch perch's window ended with
-   * the rule already above the top of the frame, so the juggle you were meant
-   * to watch played out on its way off screen.
-   *
-   * A pin fixes both halves at once: the ground stops moving, and the scroll it
-   * absorbs is scroll the ball spends on his feet rather than scroll the
-   * section spends leaving. Same range as the perch above, from one constant,
-   * because the two describing different windows is exactly the bug.
-   *
-   * Gated on BALL_QUERY — below it there is no ball, no player, and nothing to
-   * hold the page for.
-   */
-  pinMedia.add(BALL_QUERY, () => {
-    const el = sectionRef.value
-    if (!el) return
-
-    const st = ScrollTrigger.create({
-      trigger: el,
-      start: PIN_START,
-      end: `+=${PIN_SCROLL}`,
-      pin: true,
-      pinSpacing: true,
-      anticipatePin: 1,
-      invalidateOnRefresh: true
-    })
-
-    return () => st.kill()
+  gsap.from(el.querySelectorAll('.skill-card'), {
+    opacity: 0,
+    y: 24,
+    duration: 0.8,
+    ease: 'expo.out',
+    stagger: 0.045,
+    clearProps: 'transform,opacity'
   })
-})
-
-onBeforeUnmount(() => {
-  pinMedia?.revert()
 })
 </script>
 
 <template>
-  <section id="skills" ref="sectionRef" class="py-12 md:py-[120px]">
-    <div class="mx-auto max-w-[1240px] px-5 md:px-8">
-      <div class="mb-9 flex flex-wrap items-end justify-between gap-6">
-        <div>
-          <span class="mb-3.5 block font-data text-[13px] tracking-wide text-accent-text">03 — Stack</span>
-          <h2 class="font-display text-[clamp(30px,4.5vw,58px)] font-black uppercase leading-none tracking-tight">
-            Skills
-          </h2>
-        </div>
-      </div>
+  <!-- No <section> and no container of its own: the drawer that renders this
+       supplies both the frame and the padding, so a second one here would
+       inset the grid twice. -->
+  <div class="mt-[1.85em]">
+    <div
+      ref="gridRef"
+      class="skill-grid swipe-rail"
+      :role="isRail ? 'group' : undefined"
+      :aria-roledescription="isRail ? 'carousel' : undefined"
+      :aria-label="isRail ? 'Stack' : undefined"
+      :tabindex="isRail ? 0 : undefined"
+      @keydown.arrow-left.prevent="goTo(active - 1)"
+      @keydown.arrow-right.prevent="goTo(active + 1)"
+    >
+      <div v-for="(card, i) in cards" :key="card.category" class="skill-card">
+        <div :ref="(el) => setFlipper(el, i)" class="skill-flipper">
+          <div class="skill-face skill-face--front" :class="{ 'is-back': flipped[i] }" :aria-hidden="flipped[i]">
+            <svg class="skill-ghost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path v-for="d in card.icon" :key="d" :d="d" />
+            </svg>
 
-      <!-- Facing right, and unflipped, because this is the one handoff on the
-           page where the ball genuinely leaves: Skills hands over sideways, off
-           the right edge of the frame and back in at the left for Education.
-           So the overhead kick is aimed the way the ball is actually going.
-
-           At the right-hand end of the rail, not the left. The left is where he
-           belongs by the ball's logic — it is the end the ball arrives at, and
-           he would have the whole frame to kick across. It is also directly
-           under the word SKILLS, and an overhead kick is the one pose here that
-           leaves the ground: he flew up into the heading and sat across it.
-           The right-hand end is empty at every width, and the kick still exits
-           the way the ball does. -->
-      <div class="relative mb-16">
-        <span ref="railRef" class="hidden h-px w-full bg-hair md:block" aria-hidden="true" />
-
-        <!-- Seated on the rule, and the ball is his while he is here: it rolls
-             down the rule to his boot, he keeps it up off both feet, and it
-             leaves off the side. `playerRef` is how the section reaches the
-             contact surface inside him — see `touchRef` above. -->
-        <div
-          ref="playerRef"
-          class="pointer-events-none absolute -bottom-1.5 right-[8%] hidden w-[var(--cameo)] lg:block"
-        >
-          <ThePlayer move="skills" />
-        </div>
-      </div>
-
-      <div
-        ref="gridRef"
-        class="skill-grid swipe-rail"
-        :role="isRail ? 'group' : undefined"
-        :aria-roledescription="isRail ? 'carousel' : undefined"
-        :aria-label="isRail ? 'Stack' : undefined"
-        :tabindex="isRail ? 0 : undefined"
-        @keydown.arrow-left.prevent="goTo(active - 1)"
-        @keydown.arrow-right.prevent="goTo(active + 1)"
-      >
-        <div v-for="(card, i) in cards" :key="card.category" class="reveal skill-card">
-          <div :ref="(el) => setFlipper(el, i)" class="skill-flipper">
-            <div class="skill-face skill-face--front" :class="{ 'is-back': flipped[i] }" :aria-hidden="flipped[i]">
-              <svg class="skill-ghost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path v-for="d in card.icon" :key="d" :d="d" />
-              </svg>
-
-              <div class="skill-row skill-row--front">
-                <h3 class="skill-name">{{ card.category }}</h3>
-                <button
-                  type="button"
-                  class="skill-toggle"
-                  :aria-expanded="flipped[i]"
-                  :aria-controls="`skill-panel-${i}`"
-                  :tabindex="flipped[i] ? -1 : 0"
-                  @click="toggle(i)"
-                >
-                  <span class="sr-only">Show {{ card.category }} details</span>
-                  <svg class="skill-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path :d="CHEVRON" />
-                  </svg>
-                </button>
-              </div>
+            <div class="skill-row skill-row--front">
+              <h3 class="skill-name">{{ card.category }}</h3>
+              <button
+                type="button"
+                class="skill-toggle"
+                :aria-expanded="flipped[i]"
+                :aria-controls="`skill-panel-${i}`"
+                :tabindex="flipped[i] ? -1 : 0"
+                @click="toggle(i)"
+              >
+                <span class="sr-only">Show {{ card.category }} details</span>
+                <svg class="skill-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path :d="CHEVRON" />
+                </svg>
+              </button>
             </div>
+          </div>
 
-            <div
-              :id="`skill-panel-${i}`"
-              class="skill-face skill-face--back"
-              :class="{ 'is-back': !flipped[i] }"
-              :aria-hidden="!flipped[i]"
-            >
-              <p class="skill-label">{{ card.category }}</p>
+          <div
+            :id="`skill-panel-${i}`"
+            class="skill-face skill-face--back"
+            :class="{ 'is-back': !flipped[i] }"
+            :aria-hidden="!flipped[i]"
+          >
+            <p class="skill-label">{{ card.category }}</p>
 
-              <ul class="skill-chips">
-                <li v-for="tech in card.stack" :key="tech" class="skill-chip">{{ tech }}</li>
-              </ul>
+            <ul class="skill-chips">
+              <li v-for="tech in card.stack" :key="tech" class="skill-chip">{{ tech }}</li>
+            </ul>
 
-              <div class="skill-row skill-row--back">
-                <button
-                  type="button"
-                  class="skill-toggle"
-                  :aria-expanded="flipped[i]"
-                  :aria-controls="`skill-panel-${i}`"
-                  :tabindex="flipped[i] ? 0 : -1"
-                  @click="toggle(i)"
-                >
-                  <span class="sr-only">Hide {{ card.category }} details</span>
-                  <svg class="skill-chev skill-chev--back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path :d="CHEVRON" />
-                  </svg>
-                </button>
-              </div>
+            <div class="skill-row skill-row--back">
+              <button
+                type="button"
+                class="skill-toggle"
+                :aria-expanded="flipped[i]"
+                :aria-controls="`skill-panel-${i}`"
+                :tabindex="flipped[i] ? 0 : -1"
+                @click="toggle(i)"
+              >
+                <span class="sr-only">Hide {{ card.category }} details</span>
+                <svg class="skill-chev skill-chev--back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path :d="CHEVRON" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
       </div>
-
-      <div class="swipe-dots">
-        <button
-          v-for="(card, i) in cards"
-          :key="`dot-${card.category}`"
-          type="button"
-          class="swipe-dot"
-          :aria-label="`Show ${card.category}`"
-          :aria-current="active === i ? 'true' : undefined"
-          @click="goTo(i)"
-        >
-          <span />
-        </button>
-      </div>
     </div>
-  </section>
+
+    <div class="swipe-dots">
+      <button
+        v-for="(card, i) in cards"
+        :key="`dot-${card.category}`"
+        type="button"
+        class="swipe-dot"
+        :aria-label="`Show ${card.category}`"
+        :aria-current="active === i ? 'true' : undefined"
+        @click="goTo(i)"
+      >
+        <span />
+      </button>
+    </div>
+  </div>
 </template>
 
 <style scoped>

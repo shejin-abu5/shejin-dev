@@ -34,8 +34,20 @@ export const BALL_QUERY = '(min-width: 1024px)'
  * no ordering guarantee about which of the two mounts first — so the ball
  * cannot simply wait to be handed over. A player raises this on mount, and
  * without it the ball keeps the timed intro it has always had.
+ *
+ * `r` is the receiving ball's radius in px, published by TheScrollBall as it
+ * measures itself. It is here because the handover is a *swap*, and a swap
+ * between two balls of different sizes is not one: the hero draws its ball at
+ * RIG.ballR scaled by however wide the figure is being drawn — 35px at
+ * 1920×1080 — while the journey's is a CSS clamp that lands on 23px at the same
+ * width. Cross-faded, a 70px ball dissolves into a 46px one sitting 23px higher
+ * up the frame, which is the pop at the moment the ball arrives in the headline.
+ * Told the size it is handing over to, the striker can arrive at it.
+ *
+ * Zero until TheScrollBall mounts, and zero below BALL_QUERY where it never
+ * does — read it with a fallback, and take a zero to mean "nobody is catching".
  */
-export const ballEntry = { v: 0, claimed: false }
+export const ballEntry = { v: 0, claimed: false, r: 0 }
 
 /**
  * The ball's own clock: smoothed scroll, in document px, published so that a

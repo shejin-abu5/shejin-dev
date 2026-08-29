@@ -34,20 +34,53 @@ const INTRO_WORDS = INTRO_SEGMENTS.flatMap((segment) =>
   segment.text.split(' ').map((word) => ({ word, accent: !!segment.accent }))
 )
 
-// The slogan, typed out one character at a time under the bio. Its spacing
-// lives inside the strings rather than between the spans on purpose: Vue
-// condenses whitespace in the template, and a swallowed space would knock the
-// caret a full character out of line with the text it is supposed to trail.
-const SLOGAN_SEGMENTS: { text: string; class?: string }[] = [
-  { text: 'Develop' },
-  { text: ' ✽ ', class: 'text-accent' },
-  { text: "it's necessary", class: 'text-steel' }
-]
+// The line at the head of the section. "Love to" is fixed and the verb after
+// it changes on its own — see the swap in onMounted.
+//
+// Written in sentence case and uppercased in CSS, the same way the bio's
+// accent runs are: the casing is a property of how this line is set, not of
+// the words, and putting it in the strings would mean re-typing them to
+// change it.
+//
+// Each has to complete the lead on its own, which is the whole constraint on
+// what can go in here. They are read aloud as one sentence — see the
+// screen-reader line in the template — so a fragment that only works in a
+// list would come out of a screen reader as broken English.
+const LOVE_LEAD = 'Love to'
+const LOVE_WORDS = ['problems', 'solve', 'execute', 'ship']
 
-// The typewriter advances in discrete character steps, so the step count has
-// to be derived from the string. Hardcoding it would desync the caret from the
-// text the first time a word here changes.
-const SLOGAN_LENGTH = SLOGAN_SEGMENTS.reduce((total, s) => total + s.text.length, 0)
+// How long a verb sits still, and how long it takes to change.
+//
+// The hold is the number that matters and 2.4s is longer than it looks on a
+// stopwatch: this is three words on a loop directly above the one paragraph
+// on the page that has to be read, so it has to be legible at a glance and
+// then stay out of the way. Quicker and it pulls the eye back off the bio
+// every couple of seconds, which is the failure mode of every rotating
+// headline on the web.
+//
+// The move is short against it on purpose. A slow swap reads as the thing
+// being animated; a quick one reads as the word simply having changed, which
+// is what this is for.
+const LOVE_HOLD = 2.4
+// One leg of the change — the old word leaving, or the new one arriving. A
+// change costs two of these, because they run one after the other rather than
+// together; see the note on the tweens.
+const LOVE_MOVE = 0.3
+
+// How far a word travels as it changes, in px.
+//
+// A fixed distance rather than a fraction of the line, and small — the word
+// steps aside and the new one steps in, and the fade is what carries the
+// change. It is the figure the reference carousel uses (motion's `y: 20` on
+// enter and `y: -20` on exit), and it is px rather than a percentage for the
+// same reason it is there: at 34px type a percentage of the line box would put
+// the travel near 46px, which is a throw rather than a step.
+//
+// This has been a full line, which needed a window to hide the parts that had
+// left, and a third of a line with no window, which let the two words cross
+// over mid-air and read as a smudge. Neither problem exists at this distance
+// because the words are never on screen at the same time.
+const LOVE_SLIDE = 20
 
 // Where along the frame the mark has to still be when it hands the ball over.
 // Wide enough to clear TheScrollBall's own FADE_PX band at the left edge, so
@@ -271,52 +304,168 @@ onMounted(() => {
   // lives on BALL_QUERY in composables/useScrollBall.ts.
   mm = gsap.matchMedia()
 
-  // The slogan types itself out when it scrolls up into view. `all` rather than
-  // a width — this one is a line of text rather than a pinned read, and it
-  // works the same at any width — but still an `mm.add`, because that is what
-  // reverts the tween and the two caret classes on unmount.
+  // The verb changes on a loop of its own, and the line slides so that the
+  // word — not the box around it — is what sits in the middle of the page.
+  // `all` rather than a width: this is a line of text rather than a pinned
+  // read and it works the same everywhere, but it is still an `mm.add`,
+  // because that is what reverts the tweens and their inline styles on
+  // unmount.
+  //
+  // The centring is the part worth explaining, and it has been wrong twice.
+  //
+  // Sizing the slot by the grid makes it as wide as the longest word and
+  // leaves the short ones hanging at its left edge: measured at 1280, the box
+  // was dead centre but with "ship" showing the ink sat 112px left of it,
+  // because 224px of empty slot was being centred along with the words.
+  //
+  // Animating the slot's width to each word in turn fixes that and buys two
+  // worse problems. The box is narrower than the wider of the two words for
+  // most of every transition, and `overflow: hidden` then cuts that word off
+  // mid-slide — measured at 23px to 45px of it, depending on the pair. And
+  // `width` is a layout property, so every frame of the tween reflowed the
+  // centred line and re-rasterised the lead, the separator and both words at
+  // sub-pixel offsets, which is the shimmer that came with it.
+  //
+  // So the slot keeps its full width and never moves, and the whole line is
+  // translated by half the slack instead: with the word left-aligned in a slot
+  // of width W, shifting the line by (W - w) / 2 puts the ink dead centre. It
+  // is a transform, so it composites rather than reflowing, and the slot is
+  // never narrower than the word inside it, so there is nothing to clip.
+  //
+  // The cost is unchanged from the previous attempt: "Love to" glides a little
+  // as the word changes. A line this size cannot be both optically centred and
+  // pinned at the left, because the two ask for opposite things whenever the
+  // words are different lengths.
   mm.add('all', () => {
     const slogan = sloganRef.value
-    const ink = slogan?.querySelector<HTMLElement>('.hero-slogan-ink')
-    const caret = slogan?.querySelector<HTMLElement>('.hero-slogan-caret')
-    if (!slogan || !ink || !caret) return
+    const line = slogan?.querySelector<HTMLElement>('.hero-slogan-line')
+    const swap = slogan?.querySelector<HTMLElement>('.hero-slogan-swap')
+    const words = slogan?.querySelectorAll<HTMLElement>('.hero-slogan-word')
+    if (!slogan || !line || !swap || !words?.length) return
 
-    // One step per character. In IBM Plex Mono every glyph has the same
-    // advance, so an evenly stepped clip lands precisely on glyph boundaries
-    // and the caret — stepped over the same duration — sits exactly at the
-    // edge of the character that just appeared.
-    const ease = `steps(${SLOGAN_LENGTH})`
-    const duration = SLOGAN_LENGTH * 0.055
+    let tl: gsap.core.Timeline | null = null
+    let visible = false
 
-    gsap
-      .timeline({
-        scrollTrigger: {
-          trigger: slogan,
-          start: 'top 88%',
-          // Types once. A retrigger on every scroll-back would turn a
-          // deliberate flourish into a tic.
-          once: true
-        }
+    // Rebuilt rather than retuned when the measurements move, because every
+    // offset in the timeline is a number baked in at build time. The font-size
+    // is a vw clamp and the face is a webfont, so both a resize and the font
+    // finishing loading change what these should be.
+    const build = () => {
+      tl?.kill()
+
+      // Measured with any previous shift cleared, so the rects are the ones
+      // the layout would give rather than the ones the last cycle left.
+      gsap.set(line, { clearProps: 'transform' })
+      const widths = Array.from(words, (word) => word.getBoundingClientRect().width)
+      const slot = swap.getBoundingClientRect().width
+      // Half the empty slot to the right of the word, which is exactly what
+      // the line has to move right by to put that word in the middle.
+      const shift = (i: number) => (slot - widths[i]) / 2
+
+      // Every word starts a step low and the first is brought up onto the line,
+      // so it reads correctly on the first frame, before the loop has run.
+      gsap.set(words, { y: LOVE_SLIDE, opacity: 0 })
+      gsap.set(words[0], { y: 0, opacity: 1 })
+      gsap.set(line, { x: shift(0) })
+
+      // Paused, and started by the observer below rather than here.
+      tl = gsap.timeline({ repeat: -1, paused: true })
+
+      // One hold-then-move per word, wrapping so the last hands back to the
+      // first. `fromTo` on the incoming word rather than `to` is what makes
+      // the loop seamless: it re-states the below-the-slot position at the top
+      // of every cycle, so the repeat has nothing left over from the last one.
+      words.forEach((word, i) => {
+        const j = (i + 1) % words.length
+        const j2 = j
+        // A change costs two legs, so a word's slot on the timeline is its hold
+        // plus both of them.
+        const at = i * (LOVE_HOLD + LOVE_MOVE * 2) + LOVE_HOLD
+
+        // Out first, and all the way out, before the new one starts coming in.
+        //
+        // This is the reference's `AnimatePresence mode="wait"`: only one word
+        // is ever mounted, so the exit has to finish before the enter begins.
+        // Sequencing them the same way here buys the same three things it does
+        // there — the words can never overlap, so there is no smudge to design
+        // around; they never travel far enough to leave the box, so there is no
+        // window and nothing to clip; and the line is briefly wordless, which is
+        // the beat that makes it read as a word being replaced rather than two
+        // words dissolving.
+        tl!
+          // `power1.inOut` is the closest GSAP has to motion's default
+          // `easeInOut` for a tween given an explicit duration, which is what
+          // the reference leaves it at.
+          .to(word, { y: -LOVE_SLIDE, opacity: 0, duration: LOVE_MOVE, ease: 'power1.inOut' }, at)
+          .fromTo(
+            words[j2],
+            { y: LOVE_SLIDE, opacity: 0 },
+            {
+              y: 0,
+              opacity: 1,
+              duration: LOVE_MOVE,
+              ease: 'power1.inOut',
+              // Without this the from-state is written the moment the tween is
+              // built, paused timeline or not — so every word would be parked a
+              // step low at zero opacity and the line would render empty until
+              // the loop first ran. The last word wraps to the first, so the one
+              // it blanks is the one meant to be showing.
+              immediateRender: false
+            },
+            at + LOVE_MOVE
+          )
+          // Across both legs rather than either one, so the recentring is a
+          // single glide underneath the whole change. It has to be smooth even
+          // though the word is away for part of it, because the lead and the
+          // separator are on screen throughout and they move with it.
+          .to(line, { x: shift(j2), duration: LOVE_MOVE * 2, ease: 'power1.inOut' }, at)
       })
-      // Solid, not blinking, while the characters land — the blink is what
-      // the caret does when it is waiting, and during the type it isn't.
-      .call(() => caret.classList.add('is-live'))
-      .fromTo(
-        ink,
-        { clipPath: 'inset(0 100% 0 0)' },
-        { clipPath: 'inset(0 0% 0 0)', duration, ease },
-        0
-      )
-      // Measured in a function so a font swap or resize before the trigger
-      // fires can't leave the caret typing to a stale width.
-      .fromTo(caret, { x: 0 }, { x: () => ink.offsetWidth, duration, ease }, 0)
-      .call(() => caret.classList.add('is-resting'))
+    }
 
-    // matchMedia reverts tweens and inline styles on its own, but it has no
-    // way to know about the two classes above — without this, turning on
-    // reduced motion mid-session would leave a caret blinking at the start of
-    // a line that is already fully typed.
-    return () => caret.classList.remove('is-live', 'is-resting')
+    const restart = () => {
+      build()
+      if (visible) tl?.play()
+    }
+
+    build()
+
+    // Only while it is on screen. This is the one animation on the page that
+    // nobody asked for by scrolling or clicking, and the hero above it is two
+    // viewports tall — so left running it would spend a timer and a paint per
+    // frame on a line that is nowhere near the frame. Same reasoning, and the
+    // same margin, as the tool lattice in SkillsSection.vue.
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry.isIntersecting
+        visible ? tl?.play() : tl?.pause()
+      },
+      { rootMargin: '120px' }
+    )
+    io.observe(slogan)
+
+    // The first build runs against whatever face is up at the time, which on a
+    // cold load is the fallback — and a fallback mono is not the same width as
+    // Plex, so the line would hold the wrong offsets for the rest of the
+    // session.
+    document.fonts?.ready.then(restart)
+
+    // Debounced, because the font-size is a vw clamp: every pixel of a drag
+    // changes the widths, and rebuilding per event would kill and re-create
+    // the timeline a hundred times across one resize.
+    let resizeAt: number | undefined
+    const onResize = () => {
+      window.clearTimeout(resizeAt)
+      resizeAt = window.setTimeout(restart, 150)
+    }
+    window.addEventListener('resize', onResize)
+
+    return () => {
+      io.disconnect()
+      window.removeEventListener('resize', onResize)
+      window.clearTimeout(resizeAt)
+      tl?.kill()
+      gsap.set(line, { clearProps: 'transform' })
+    }
   })
 
   mm.add('(min-width: 768px)', () => {
@@ -360,9 +509,9 @@ onMounted(() => {
         duration: 1,
         stagger: 0.45,
         scrollTrigger: {
-          // The paragraph, not the section around it. The slogan below it
-          // is part of that section, so triggering on the section would
-          // stretch this window by the slogan's height and leave the last
+          // The paragraph, not the section around it. The "Love to" line above
+          // it is part of that section, so triggering on the section would
+          // stretch this window by that line's height and leave the last
           // words of the bio still dim well past the point they are read.
           trigger: copy,
           start: 'top 82%',
@@ -611,24 +760,38 @@ onUnmounted(() => {
   <section ref="introRef" class="hero-intro" aria-label="Introduction">
     
 
+    <!-- Above the bio, which is where the section now opens. -->
+    <p ref="sloganRef" class="hero-slogan">
+      <!-- Hidden as a unit rather than word by word. The visible line is three
+           alternatives sharing one slot, so read straight it comes out as
+           "love to solve problems execute ship" — the stacking is the grammar,
+           and a screen reader has no way to hear it. The sentence below says
+           the same thing in a form that survives being read aloud. -->
+      <span class="hero-slogan-line" aria-hidden="true">
+        <span class="hero-slogan-lead text-steel">{{ LOVE_LEAD }}</span>
+        <!-- Its own element rather than a character on the end of LOVE_LEAD,
+             so it stays out of the screen-reader sentence below — read aloud,
+             a heavy teardrop-spoked asterisk is either noise or nothing
+             depending on the synthesiser. -->
+        <span class="hero-slogan-sep text-accent">✽</span>
+        <!-- A grid with every word in the one cell: it sizes itself to the
+             widest of them and never changes width, which is what holds the
+             lead still while they swap. Measuring them in script and setting a
+             px width would do the same thing and go stale on a font swap. -->
+        <span class="hero-slogan-swap">
+          <span v-for="word in LOVE_WORDS" :key="word" class="hero-slogan-word font-semibold">{{ word }}</span>
+        </span>
+      </span>
+      <span class="sr-only">{{ LOVE_LEAD }} {{ LOVE_WORDS.join(', ') }}.</span>
+    </p>
+
     <p class="hero-intro-copy">
       <span
         v-for="(item, i) in INTRO_WORDS"
         :key="`${i}-${item.word}`"
         class="hero-word"
-        :class="{ 'hero-word--accent': item.accent }"
+        :class="{ 'hero-word--steel': item.accent }"
       >{{ item.word }}</span>
-    </p>
-
-            <p ref="sloganRef" class="hero-slogan">
-      <span class="hero-slogan-line">
-        <span class="hero-slogan-ink"><span
-          v-for="(segment, i) in SLOGAN_SEGMENTS"
-          :key="i"
-          :class="segment.class"
-        >{{ segment.text }}</span></span>
-        <span class="hero-slogan-caret" aria-hidden="true" />
-      </span>
     </p>
 
 
@@ -798,69 +961,93 @@ onUnmounted(() => {
 .hero-word--accent {
   color: theme('colors.accent-text');
 }
+.hero-word--steel {
+  color: theme('colors.steel');
+}
 
 .hero-slogan {
   display: flex;
   justify-content: center;
-  margin: clamp(1.75rem, 4.5vh, 3.25rem) 0 0;
+  /* Opens the section now, so the space that used to sit above it belongs
+     below it instead — this line and the bio are one block and the gap between
+     them should read as smaller than the gap to the heading above. */
+  margin: 0 0 clamp(1.25rem, 3.5vh, 2.25rem);
   padding: 0 1.25rem;
   color: theme('colors.ink');
 }
 
-/* Shrink-wraps the text so the caret, which is positioned against this box,
-   has a right edge to travel to. The line as a whole is what gets centred —
-   the type itself still runs left to right inside it, which is why the
-   composition doesn't slide sideways as characters land. */
+/* Shrink-wrapped and centred as a unit. Because the swap below never changes
+   width, centring the pair leaves the lead on exactly the same pixel from the
+   first word to the last — which is the point of it being the fixed half. */
 .hero-slogan-line {
-  position: relative;
-  display: inline-flex;
-}
-
-.hero-slogan-ink {
+  display: flex;
+  /* Centred rather than `baseline`. It mattered more when the swap was an
+     overflow box — those report their bottom margin edge as their baseline, so
+     baseline alignment hung the lead off the bottom of it — and the mask has
+     since gone. It stays because every part of the line carries the same
+     font-size and line-height, which makes centring exact and leaves nothing
+     for a baseline to fix. */
+  align-items: center;
+  gap: 0.5em;
   font-family: theme('fontFamily.data');
-  font-size: clamp(15px, 1.9vw, 24px);
+  /* Sized so the whole line still fits a phone without wrapping. Monospace
+     makes that arithmetic exact rather than a guess: 22 glyphs at the 0.6em
+     advance, plus the letter-spacing on each and the two gaps, is 15.5em — so
+     at the 18px floor the line is 279px inside the 350px a 390px screen leaves
+     after the padding. "Solve problems" is the longest of the three and the
+     grid is already sized to it, so that is the case to clear. */
+  font-size: clamp(18px, 2.8vw, 34px);
+  /* Every weight of IBM Plex Mono shares one advance width, so changing this
+     does not move the grid the swap is measured against.
+
+     Note that the face is loaded at 400, 500 and 700 (see nuxt.config.ts), so a
+     value between those rounds to the nearest one that exists — 300 renders as
+     the 400. Add the weight to that URL if a lighter one is actually wanted. */
+  font-weight: 300;
   text-transform: uppercase;
-  /* Uniform across every glyph, so it stretches the monospace grid without
-     breaking it — the stepped clip still lands on character boundaries. */
   letter-spacing: 0.06em;
-  /* `pre`, not `nowrap`: the spaces that separate the three segments are
-     load-bearing here. Collapsing one would shorten the grid the caret is
-     stepping along. */
-  white-space: pre;
+  line-height: 1.35;
 }
 
-/* Hidden until the typewriter claims it, so the line reads as finished text
-   rather than as a stalled prompt when the animation never runs. */
-.hero-slogan-caret {
-  position: absolute;
-  left: 0;
-  top: 0.1em;
-  bottom: 0.1em;
-  width: 2px;
-  background: theme('colors.accent');
-  opacity: 0;
+/* No colour of its own, so it takes the ink from .hero-slogan with everything
+   else on the line. */
+.hero-slogan-sep {
+  white-space: nowrap;
 }
 
-.hero-slogan-caret.is-live {
-  opacity: 1;
+.hero-slogan-lead {
+  white-space: nowrap;
 }
 
-/* Only once the last character has landed. A caret that blinks while it is
-   still typing reads as a rendering fault rather than as a cursor. The
-   animation overrides `.is-live`'s opacity by cascade, so both classes stay
-   on the element. */
-.hero-slogan-caret.is-resting {
-  animation: hero-caret-blink 1.1s steps(1) infinite;
+/* The slot. Grid rather than absolute positioning so the box still takes its
+   size from its children — every word sits in the one cell, so the width is
+   the widest word's and the height is one line, and neither has to be
+   measured or hardcoded.
+
+   No `overflow: hidden`. It was here when the words travelled a full line and
+   had to be hidden once they left the box; at a 20px step they never get far
+   enough out to need it, and they are transparent by the time they stop. Taking
+   it off means there is no edge anywhere for a word to be cut against — which
+   was the complaint that started this, though the actual culprit then was this
+   box's *width* being animated between the words' widths while the wider one
+   was on screen, slicing 23px to 45px off its right-hand side. The width is
+   fixed now and the line is centred with a transform instead. */
+.hero-slogan-swap {
+  display: grid;
 }
 
-@keyframes hero-caret-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  50.01%,
-  100% {
-    opacity: 0;
-  }
+/* No colour here either. The word carried the accent while the ✽ was gone;
+   with the separator back the line is set in ink throughout, and the weight
+   and the size are what give it its emphasis instead. */
+.hero-slogan-word {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+  /* Its own width rather than the grid cell's, which is what makes the three of
+     them measurable one by one — a stretched item reports the width of the
+     widest word whichever one it holds. The box around them is narrower than
+     this for every word but the longest, and `overflow: hidden` on the slot is
+     what keeps the overflow from showing. */
+  width: max-content;
 }
+
 </style>

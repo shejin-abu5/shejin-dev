@@ -366,6 +366,154 @@ useBallPerch(() => touchRef.value, {
   side: true
 })
 
+/*
+  View more — the nine flip cards, in a drawer.
+
+  The lattice answers "what does he build with?" in about a second and cannot
+  be read any more closely than that: it shows nine of nineteen marks at any
+  instant and swaps them under you. Anyone who wants the actual list is asking
+  a different question, and the section that used to answer it is still here —
+  SkillsSection-card.vue, now stripped to its grid and mounted below.
+
+  A drawer rather than an expanding block in flow. This section is pinned for
+  620px of scroll, and anything that changes its height mid-pin makes the pin
+  measure wrong: ScrollTrigger caches the pin's geometry at refresh, so a panel
+  opening inside it either overflows the held frame or forces a refresh that
+  jumps the page. A fixed panel teleported out of the section has no height in
+  the document at all, so the pin never learns about it.
+
+  Teleported for a second reason too: a pinned element is wrapped in a
+  transformed pin-spacer, and `position: fixed` inside a transformed ancestor
+  resolves against that ancestor rather than the viewport. Left in place the
+  panel would be positioned against a box that is itself being moved.
+*/
+const open = ref(false)
+const scrimRef = ref<HTMLElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
+const closeRef = ref<HTMLElement | null>(null)
+
+/** Whatever had focus when the drawer opened, so it can be handed back. */
+let opener: HTMLElement | null = null
+
+/*
+  The page must not scroll behind the panel — on a phone especially, where a
+  drag that starts on the scrim otherwise scrolls the document under it.
+
+  On the documentElement rather than the body: body overflow only reaches the
+  viewport by propagation, and that propagation is off the moment anything
+  gives html a non-visible overflow of its own. The padding compensates for the
+  scrollbar the lock removes, which is otherwise a several-pixel horizontal jump
+  of every fixed and centred thing on the page at the instant it opens.
+*/
+function lockScroll() {
+  const gap = window.innerWidth - document.documentElement.clientWidth
+  document.documentElement.style.overflow = 'hidden'
+  if (gap > 0) document.documentElement.style.paddingRight = `${gap}px`
+}
+
+function unlockScroll() {
+  document.documentElement.style.removeProperty('overflow')
+  document.documentElement.style.removeProperty('padding-right')
+}
+
+/**
+ * Escape closes, and Tab cycles inside the panel.
+ *
+ * The trap is worth the twenty lines here because the thing behind the scrim is
+ * a whole page of links: without it, one Tab past the last chip walks the
+ * keyboard into a document the pointer cannot reach and the scrim is covering.
+ *
+ * Candidates are filtered on live `tabIndex` rather than matched by selector.
+ * The cards put `tabindex="-1"` on whichever face is turned away, so a static
+ * `button:not([tabindex="-1"])` would keep offering the back of every unflipped
+ * card — the property is the only thing that tracks the flip.
+ */
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    closeDrawer()
+    return
+  }
+
+  if (e.key !== 'Tab') return
+
+  const panel = panelRef.value
+  if (!panel) return
+
+  const items = Array.from(
+    panel.querySelectorAll<HTMLElement>('a[href], button, [tabindex]')
+  ).filter((el) => el.tabIndex >= 0 && !el.hasAttribute('disabled'))
+
+  if (!items.length) return
+
+  const first = items[0]
+  const last = items[items.length - 1]
+  const activeEl = document.activeElement
+
+  // Also catches focus having escaped the panel entirely — if it is somewhere
+  // else on the page, the next Tab pulls it back to an end of this list.
+  if (e.shiftKey && (activeEl === first || !panel.contains(activeEl))) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && (activeEl === last || !panel.contains(activeEl))) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+async function openDrawer() {
+  if (open.value) return
+
+  opener = (document.activeElement as HTMLElement | null) ?? null
+  open.value = true
+  lockScroll()
+  window.addEventListener('keydown', onKeydown)
+
+  // The panel does not exist until the v-if has rendered, and neither does the
+  // card grid inside it — which mounts on the same tick and runs its own entry
+  // stagger against this one.
+  await nextTick()
+
+  gsap.fromTo(scrimRef.value, { opacity: 0 }, { opacity: 1, duration: 0.32, ease: 'power2.out' })
+  gsap.fromTo(
+    panelRef.value,
+    { yPercent: 100 },
+    { yPercent: 0, duration: 0.62, ease: 'expo.out' }
+  )
+
+  closeRef.value?.focus()
+}
+
+function closeDrawer() {
+  if (!open.value) return
+
+  window.removeEventListener('keydown', onKeydown)
+
+  gsap.to(scrimRef.value, { opacity: 0, duration: 0.26, ease: 'power2.in' })
+  gsap.to(panelRef.value, {
+    yPercent: 100,
+    duration: 0.4,
+    ease: 'power3.in',
+    // Unmounted only once it is off screen — v-if would otherwise take the
+    // panel out from under the tween on the first frame.
+    onComplete: () => {
+      open.value = false
+      unlockScroll()
+      // preventScroll because the button is inside a pinned section: handing
+      // focus back is not a request to scroll anywhere, and the browser's
+      // default scroll-into-view would fight the pin for the frame.
+      opener?.focus({ preventScroll: true })
+      opener = null
+    }
+  })
+}
+
+/** Leaving the page with the drawer open must not leave the document locked. */
+function teardownDrawer() {
+  window.removeEventListener('keydown', onKeydown)
+  if (open.value) unlockScroll()
+}
+
 let pinMedia: ReturnType<typeof gsap.matchMedia> | null = null
 
 onMounted(() => {
@@ -421,6 +569,7 @@ onBeforeUnmount(() => {
   stop()
   io?.disconnect()
   pinMedia?.revert()
+  teardownDrawer()
 })
 </script>
 
@@ -464,6 +613,24 @@ onBeforeUnmount(() => {
            The tools I reach for day to day the frameworks, 
            the styling and motion layer on top of them, and the AI workflow I build with now.
           </p>
+
+          <!-- The lattice is deliberately unreadable — it shows nine of
+               nineteen marks and swaps them under you — so this is the way to
+               the full list. `aria-haspopup="dialog"` rather than
+               `aria-expanded`: what opens is a modal panel, not a region of
+               this section that grows. -->
+          <button
+            type="button"
+            class="skills-more"
+            aria-haspopup="dialog"
+            @click="openDrawer"
+          >
+            View more
+            <svg class="skills-more-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h13" />
+              <path d="m12.5 6 6 6-6 6" />
+            </svg>
+          </button>
         </div>
 
         <!-- Decorative in the literal sense: what it shows changes every 1.4s,
@@ -502,10 +669,195 @@ onBeforeUnmount(() => {
         </ul>
       </div>
     </div>
+
+    <!-- Out of the section entirely: it is pinned, and a pinned element sits
+         inside a transformed pin-spacer that `position: fixed` would resolve
+         against instead of the viewport. See the note on `open` above. -->
+    <Teleport to="body">
+      <div v-if="open" class="sk-drawer" role="dialog" aria-modal="true" aria-labelledby="sk-drawer-title">
+        <div ref="scrimRef" class="sk-scrim" @click="closeDrawer" />
+
+        <div ref="panelRef" class="sk-panel">
+          <div class="mx-auto max-w-[1240px] px-5 md:px-8">
+            <div class="sk-head">
+              <div>
+                <span class="block font-data text-[13px] tracking-wide text-accent-text">03 — Stack</span>
+                <h2 id="sk-drawer-title" class="mt-2 font-display text-[clamp(22px,3vw,34px)] font-black uppercase leading-none tracking-tight">
+                  The full stack
+                </h2>
+              </div>
+
+              <button ref="closeRef" type="button" class="sk-close" @click="closeDrawer">
+                <span class="sr-only">Close</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+                  <path d="m6.5 6.5 11 11" />
+                  <path d="m17.5 6.5-11 11" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- <p class="sk-lede">Nine categories. Turn a card for what is under it.</p> -->
+
+            <!-- Lazy so the nine cards and their chip lists are a chunk that is
+                 only fetched by someone who asks for them, and `v-if` so the
+                 grid mounts on open — which is what its entry stagger runs on,
+                 there being no scroll position inside a fixed panel to trigger
+                 the usual reveal from. -->
+            <LazySkillsSectionCard />
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
 <style scoped>
+/* The way into the drawer, and the only interactive thing in this column. Sized
+   and coloured off the nav's status pill (TheNav.vue) so the page has one
+   pill-shaped control rather than two that nearly match. */
+.skills-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.75rem;
+  border-radius: 9999px;
+  border: 1px solid theme('colors.hair');
+  padding: 0.6rem 1.15rem;
+  font-family: theme('fontFamily.data');
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: theme('colors.ink');
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+@media (hover: hover) {
+  .skills-more:hover {
+    background: theme('colors.paper-soft');
+    border-color: theme('colors.steel');
+    color: theme('colors.accent-text');
+  }
+}
+
+.skills-more:focus-visible {
+  background: theme('colors.paper-soft');
+  color: theme('colors.accent-text');
+}
+
+.skills-more-mark {
+  height: 15px;
+  width: 15px;
+  transition: transform 0.25s ease;
+}
+
+/* The arrow leans the way the panel comes from — up — rather than sliding
+   right, which is what a link to another page does elsewhere on the site. */
+@media (hover: hover) {
+  .skills-more:hover .skills-more-mark {
+    transform: rotate(-90deg);
+  }
+}
+
+/* Over everything else that is fixed, which on this page is two things: the
+   nav at z-100 (TheNav.vue) and the scroll ball at z-90 (TheScrollBall.vue).
+   A modal that the ball can float across is not modal, and the nav's links are
+   reachable behind a scrim that is meant to be swallowing the page. */
+.sk-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.sk-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(18 18 18 / 0.44);
+  /* A light blur rather than a heavier scrim: the lattice is still turning
+     behind this, and it is worth seeing that the page is alive under the panel
+     rather than blacked out. */
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/*
+  A bottom sheet at every width, not a side panel.
+
+  The grid inside is three columns of ~380px above 1024px — the width it has in
+  a full section — and a side drawer wide enough for that is most of the screen
+  anyway. Coming up from the bottom also puts it directly under the button that
+  opened it, and leaves the section's own heading visible above the panel.
+
+  `dvh` so the sheet is measured against the visible viewport on a phone rather
+  than the one that exists when the address bar is hidden; the `vh` line before
+  it is the fallback for engines without it.
+*/
+.sk-panel {
+  position: relative;
+  max-height: 88vh;
+  max-height: 88dvh;
+  /* The scroller. overflow-x is declared rather than left to compute: an auto
+     box computes the other axis to auto as well, and the card rail below 1024px
+     bleeds into this container's padding by design — an auto x would give the
+     sheet a horizontal scrollbar over a rail that already has one. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  background: theme('colors.paper');
+  border-top: 1px solid theme('colors.hair');
+  border-radius: 26px 26px 0 0;
+  padding-block: 1.75rem 2.25rem;
+  box-shadow: 0 -18px 60px rgb(18 18 18 / 0.16);
+}
+
+@media (min-width: 768px) {
+  .sk-panel {
+    padding-block: 2.25rem 2.75rem;
+  }
+}
+
+.sk-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.sk-close {
+  display: inline-flex;
+  height: 44px;
+  width: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid theme('colors.hair');
+  color: theme('colors.steel');
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.sk-close svg {
+  height: 18px;
+  width: 18px;
+}
+
+.sk-close:hover,
+.sk-close:focus-visible {
+  background: theme('colors.paper-soft');
+  color: theme('colors.accent-text');
+}
+
+.sk-lede {
+  margin-top: 0.85rem;
+  margin-bottom: 1.85rem;
+  max-width: 46ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: theme('colors.steel');
+}
+
 .skills-split {
   display: grid;
   gap: 3rem;

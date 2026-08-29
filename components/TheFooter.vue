@@ -549,6 +549,22 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- Below the resting rule, not on it. That rule is where the page's ball
+           comes to a stop and hops for as long as you stay there — see the
+           perch in the script — so it is the one thing the last screen is
+           built to draw the eye to, and a line of small print sharing the row
+           would be competing with it.
+
+           The year is written out rather than taken from `new Date()`. The site
+           is prerendered, so a computed year is baked in at build time and then
+           recomputed on the client at hydration: the two agree for most of the
+           year and disagree across New Year, which is a hydration mismatch on
+           the one night it would be most annoying to debug. One number to edit
+           in January is the cheaper of the two. -->
+      <p class="mt-10 font-data text-[12px] text-white/40">
+        © 2026 Shejin Abu. All rights reserved.
+      </p>
+
     </div>
   </footer>
 </template>
