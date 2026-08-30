@@ -399,6 +399,37 @@ onMounted(() => {
       <span ref="markRef">Shejin</span>
     </div>
 
+    <!-- The same cameo as the one below `lg`, and a second element rather than
+         one made responsive, because the two are hung off different things.
+
+         The desktop figure stands on the rule above the contact row — he is
+         placed inside that row, so `bottom-full` is the rule and `right-[7%]`
+         is a fraction of the container. Neither of those describes anywhere in
+         particular once the rule is gone, and below `md` it is: the border is
+         `md:border-t`. Expressing the desktop position from out here instead
+         is not possible in static CSS either — its top edge is wherever the
+         contact block's content happens to end. So the breakpoints get one box
+         each, and the one that is not in play is `display: none`, which costs
+         it its ScrollTrigger and its timeline as well as its pixels.
+
+         He stands on the bottom edge of the document, in front of the cut
+         wordmark, which is the only surface down here — and the right one: he
+         is on the line the page runs out on, which is what the desktop figure
+         is doing on the rule. Placed before the content container rather than
+         after it, so the container's `z-10` paints the small print over him if
+         the two ever meet, rather than the other way round.
+
+         Inset to the container's own padding (`px-5 md:px-8`) instead of to
+         the viewport, so he lines up with the edge the wordmark and the rule
+         end on rather than floating a few px outside it. -->
+    <div class="player-glow pointer-events-none absolute bottom-0 right-5 w-[104px] md:right-8 md:w-[150px] lg:hidden">
+      <!-- The tap is the one cameo with no ball in it — he is waiting, not
+           reacting — so it is the one move that still means what it meant at a
+           width where the page's ball never enters play. See `gate` in
+           ThePlayer for why every other cameo stops at 1024. -->
+      <ThePlayer move="footer" flip tone="dark" gate="(max-width: 1023.98px)" />
+    </div>
+
     <div class="relative z-10 mx-auto max-w-[1240px] px-5 md:px-8">
       <span class="mb-3.5 block font-data text-[13px] tracking-wide text-steel">
         04 — Get in touch
@@ -561,7 +592,20 @@ onMounted(() => {
            year and disagree across New Year, which is a hydration mismatch on
            the one night it would be most annoying to debug. One number to edit
            in January is the cheaper of the two. -->
-      <p class="mt-10 font-data text-[12px] text-white/40">
+      <!-- The right-hand inset is the mobile figure's column, kept empty.
+
+           He stands on the bottom edge, and any figure tall enough to read as
+           one crosses this line on the way down to it — the band below the
+           small print is 64px and he is 147. Reserving the width is the only
+           version where the notice is never underneath him: he is decorative
+           and this is the copyright, so where the two want the same pixels it
+           is the picture that gives way. On a 390px phone the line takes a
+           second row for it, which is what small print is for.
+
+           Dropped at `md`, where the container is wide enough that the notice
+           ends several hundred px short of him on its own and the padding would
+           be reserving space nothing was going to use. -->
+      <p class="mt-10 pr-[124px] font-data text-[12px] text-white/40 md:pr-0">
         © 2026 Shejin Abu. All rights reserved.
       </p>
 

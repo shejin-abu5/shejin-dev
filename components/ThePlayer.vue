@@ -99,11 +99,26 @@ const props = withDefaults(
      * already what its clock is measured against.
      */
     progress?: () => number
+    /**
+     * The width the cameo is allowed to play at.
+     *
+     * Every other cameo on the page is timed off the ball going past it, and
+     * the ball does not exist below 1024 — see BALL_QUERY in useScrollBall —
+     * so the default is that width, and a figure rendered narrower than it
+     * simply stands where he was put.
+     *
+     * The footer's is the one move with no ball in it at all: he is waiting,
+     * not reacting. That makes it the only cameo that can be handed a query of
+     * its own and still mean the same thing at a width where nothing else
+     * does.
+     */
+    gate?: string
   }>(),
   {
     variant: 'cameo',
     flip: false,
     tone: 'light',
+    gate: '(min-width: 1024px)',
     // Wide on purpose. A cameo is scrubbed, so its window *is* how long the
     // move takes to watch — and the default used to be narrow enough that
     // Education and the footer played out over 300px of scroll, which is a
@@ -170,6 +185,12 @@ const ownsBall = computed(() => props.variant === 'hero')
  */
 const uid = useId()
 const gid = (name: string) => `p-${name}-${uid}`
+
+/** True once the run's turn has put the rig on a negative scaleX. Only the
+ *  glyphs care — see applyRig and `.p-glyph` in the stylesheet. It is a ref and
+ *  not a classList call from applyRig because the class it belongs beside is a
+ *  bound one, and Vue rewrites the whole attribute when a bound class changes. */
+const faceFlip = ref(false)
 
 const rootRef = ref<SVGSVGElement | null>(null)
 const rigRef = ref<SVGGElement | null>(null)
@@ -535,6 +556,15 @@ onMounted(() => {
     // is hidden by the pose being symmetric rather than by the figure being too
     // thin to read — see `backView`.
     const face = k >= 0.5 ? -1 : 1
+
+    // The turn mirrors the rig, and letters do not mirror: at face === -1 the
+    // 28 on his shorts and the C on the armband come out backwards. That is the
+    // same thing the variant flip does to them, and it is undone the same way —
+    // see `.p-glyph` in the stylesheet. A class rather than a transform written
+    // from here, because both flips can be on at once, and what the glyphs need
+    // corrected is whether the *net* scale is negative, not whether either flip
+    // on its own is.
+    faceFlip.value = face === -1
 
     for (const j of JOINTS) {
       const els = jointEls(j)
@@ -1583,7 +1613,7 @@ onMounted(() => {
      * a touch played on a timer would meet it only at whatever speed the page
      * happened to be moving when it triggered.
      */
-    mm.add('(min-width: 1024px)', () => {
+    mm.add(props.gate, () => {
       const anchor = props.anchor?.() ?? svg.parentElement
       const cam = CAMEOS[props.move ?? 'work']
       if (!anchor || !cam) return
@@ -1941,7 +1971,7 @@ onBeforeUnmount(() => {
   <svg
     ref="rootRef"
     class="player"
-    :class="[`player--${variant}`, { 'player--flip': flip }]"
+    :class="[`player--${variant}`, { 'player--flip': flip, 'player--faceflip': faceFlip }]"
     viewBox="0 0 240 340"
     fill="none"
     aria-hidden="true"
@@ -2374,11 +2404,25 @@ onBeforeUnmount(() => {
    flip put them and only their handedness is undone. `fill-box` is what makes
    that safe — it resolves the origin against each glyph's own bounding box, so
    the rule does not have to know where either of them sits, and it keeps
-   working through the joint transforms GSAP writes to their parent groups. */
-.player--flip .p-glyph {
+   working through the joint transforms GSAP writes to their parent groups.
+
+   `player--faceflip` is the same problem from the other source: the run's turn
+   puts the rig itself on a negative scaleX once he has gone round, so the phone
+   showed a mirrored 28 and a Ɔ after the turn even where nothing is flipped.
+   applyRig writes that class on this same element, so the two cases share one
+   correction. */
+.player--flip .p-glyph,
+.player--faceflip .p-glyph {
   transform: scaleX(-1);
   transform-box: fill-box;
   transform-origin: center;
+}
+
+/* Both at once is not a mirror at all — a flipped player who turns round is
+   facing his original way, and the glyphs with him. Correcting them here would
+   be the bug the rule above exists to fix. */
+.player--flip.player--faceflip .p-glyph {
+  transform: none;
 }
 
 /* Both layers the ball's own tweens write to, declared once here rather than
