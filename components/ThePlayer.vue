@@ -39,11 +39,14 @@ const props = withDefaults(
     /**
      * Which ground he is standing on.
      *
-     * Only two things in the figure are drawn in the page's ink rather than in
+     * Only two things in the figure are lit by the page rather than fixed in
      * his own palette — his hair and the shadow under his boots — and both of
-     * them disappear on the footer, which is `bg-ink`. Black hair on a black
-     * background is not a subtle loss of contrast: it read as a bald man, and
-     * the shadow simply was not there.
+     * them broke on the footer, which is `bg-ink`. His hair was black then, and
+     * black hair on a black background is not a subtle loss of contrast: it
+     * read as a bald man. The shadow simply was not there. The hair is blond
+     * now and no longer at risk of vanishing into the dark, but it still shifts
+     * with the ground, because a figure lit by one room and coloured for
+     * another is its own kind of wrong.
      */
     tone?: 'light' | 'dark'
     /**
@@ -114,11 +117,16 @@ const props = withDefaults(
 /**
  * Hair, and the shadow under him, against the ground he is standing on.
  *
- * On dark the hair lifts to a charcoal rather than inverting to blond — it has
- * to still read as the same character's black hair, just lit from a room that
- * is dark, so it goes up only as far as it takes to separate from #121212. The
- * shadow flips outright: a dark smudge on a dark floor is nothing, and what
- * sits under a figure on a dark ground is spill light, not shade.
+ * The hair is blond, which is the one colour on him that is *already* light,
+ * and so the only one whose dark variant goes the other way: it deepens to a
+ * warmer, heavier gold rather than lifting. This used to be black hair, and
+ * black lifts to a charcoal on dark for the obvious reason. A blond lifted the
+ * same way lands somewhere near cream and stops reading as hair at all — it
+ * reads as a hole in the head. Held down, it stays gold against #121212 and
+ * still separates from the skin below it, which is the whole job.
+ *
+ * The shadow flips outright: a dark smudge on a dark floor is nothing, and
+ * what sits under a figure on a dark ground is spill light, not shade.
  */
 /**
  * Whether the head is drawn from behind. Written by `applyRig` from the turn's
@@ -126,7 +134,7 @@ const props = withDefaults(
  */
 const back = ref(false)
 
-const hair = computed(() => (props.tone === 'dark' ? '#5E6172' : '#16171B'))
+const hair = computed(() => (props.tone === 'dark' ? '#C08A2C' : '#DDA83A'))
 const shade = computed(() =>
   props.tone === 'dark'
     ? { fill: '#FFFFFF', opacity: 0.14 }
@@ -2044,18 +2052,23 @@ onBeforeUnmount(() => {
            transform, and are one joint drawn in two places — see jointEls. -->
       <g data-j="torso" data-o="120 186">
         <!-- Back arm, behind the shirt. Same joint-centred capsule rule as the
-             legs — shoulder at 124, elbow at 162, hand at 200. -->
-        <!-- Shoulder 124, elbow 164, hand 206 — four units longer in each
-             segment than before, because the arms hang off a torso that is now
-             fourteen units longer and a hand that stops at the waistband reads
-             as a stump. They finish just onto the thigh, which is where arms
-             finish. -->
+             legs — shoulder at 124, elbow at 170, hand at 222.
+
+             Those last two were 164 and 206, and 206 is the number that was
+             wrong: it is six units below the hip, so a hand hanging at rest
+             stopped level with the waistband. The comment here has claimed
+             since it was written that the arms "finish just onto the thigh,
+             which is where arms finish" — they did not, they finished at the
+             top of the shorts, and everything downstream of that was the pose
+             table working around it. Fingertips reach mid-thigh on a body; hip
+             is 200 and knee is 259, so 222 is that, and the arm is now 98 units
+             of a 258-unit figure rather than 82. -->
         <g data-j="armB" data-o="114 124">
-          <rect data-far="skin" x="105" y="115" width="18" height="58" rx="9" fill="#F2BF95" />
+          <rect data-far="skin" x="105" y="115" width="18" height="64" rx="9" fill="#F2BF95" />
           <rect data-far="sleeve" x="104" y="114" width="20" height="34" rx="10" fill="#FFFFFF" />
-          <g data-j="forearmB" data-o="114 164">
-            <rect data-far="skin" x="106" y="156" width="16" height="58" rx="8" fill="#F2BF95" />
-            <circle data-far="skin" cx="114" cy="206" r="9" fill="#F2BF95" />
+          <g data-j="forearmB" data-o="114 170">
+            <rect data-far="skin" x="106" y="162" width="16" height="68" rx="8" fill="#F2BF95" />
+            <circle data-far="skin" cx="114" cy="222" r="9" fill="#F2BF95" />
           </g>
         </g>
 
@@ -2133,6 +2146,45 @@ onBeforeUnmount(() => {
         </g>
       </g>
 
+      <!-- ── FRONT LEG, UPPER HALF ───────────────────────────────────────
+           Thigh and shorts panel, split off the rest of the front leg for the
+           same reason the torso is split in two: one joint, two `data-j`
+           groups, one transform written to both by jointEls.
+
+           What the split buys is the front arm. It hangs from the torso group
+           below, so anything painted after that group covers it — and the whole
+           front leg used to be. A hand at rest sits at the hem of the shorts,
+           which meant the hand was behind them: see the arms above. Painted
+           here, the near thigh and its shorts sit *under* the near arm, which
+           is the order a body is in.
+
+           The shin and boot stay where they were, after the ball, because that
+           is a different question and it already has the right answer — a trap
+           puts the sole on top of the ball. Only the half above the knee moved,
+           and the ball is now in front of the thigh rather than behind it,
+           which is what a knee touch wants anyway. -->
+      <g data-j="legF" data-o="120 200">
+        <rect x="104" y="184" width="32" height="91" rx="16" fill="#F2BF95" />
+        <path d="M103 200a17 17 0 0 1 34 0v32h-34z" fill="#1B4FD1" />
+        <!-- The squad number, on the shorts rather than the shirt. The shirt
+             is hemmed at 203 and the hem moves with the lean, so a number
+             high enough to clear the stripes sat in the band the hem sweeps
+             through; the panel here is a flat rectangle from 200 to 232 that
+             the arm never crosses. Inside the legF group, so it swings with
+             the thigh — which is where a number printed on shorts goes. -->
+        <text
+          class="p-glyph"
+          x="120"
+          y="222"
+          text-anchor="middle"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="17"
+          font-weight="700"
+          letter-spacing="-0.5"
+          fill="#FFFFFF"
+        >28</text>
+      </g>
+
       <!-- ── TORSO, UPPER HALF ───────────────────────────────────────────
            The same joint as the lower half and the same transform; only the
            painting order separates them. -->
@@ -2161,6 +2213,21 @@ onBeforeUnmount(() => {
             <circle cx="98" cy="92" r="4.5" fill="#DCA87C" />
             <circle cx="142" cy="92" r="4.5" fill="#DCA87C" />
             <circle cx="120" cy="88" r="24" :fill="hair" />
+            <!-- The crown, seen from behind. The profile gets most of its
+                 volume from a fringe swept forward, which from here is hidden
+                 behind the skull; without this the turn would end on a head
+                 that had quietly lost four units off the top of it.
+
+                 Symmetric about 120 by construction — 99+141 and 102+138 both
+                 come to 240 — for the same reason the skull below it is: this
+                 is the frame the facing flips on, and it has to be its own
+                 mirror image.
+
+                 Both ends sit at y=82, four units inside the skull rather than
+                 on its edge. On the edge the lens met the circle at an angle
+                 and left a notch at each temple; tucked under it, the two
+                 shapes merge into one silhouette. -->
+            <path d="M99 82C102 53 138 53 141 82Z" :fill="hair" />
           </template>
 
           <!-- Seen from the side. Hair as a cap over the whole skull, not a
@@ -2168,31 +2235,66 @@ onBeforeUnmount(() => {
                and stopped, leaving the back of his head as bare skin from the
                crown to the collar.
 
-               The outer edge is an arc on the skull circle itself, from the
-               nape up over the crown to the hairline; the curves back down are
-               the hairline. Sweep-flag 1, and it is worth knowing why: SVG's
-               positive-angle direction is measured in a y-down space, so the
-               flag that takes the arc *over* the head is the one that reads as
-               clockwise. Set to 0 it goes the other way round — under the jaw
-               and across the face — and the two ends still join, so it does not
-               fail, it just fills the entire head in black. -->
+               The outer edge used to be an arc on the skull circle itself, so
+               the hair was exactly the thickness of nothing — a scalp painted
+               dark. It is curves now, swept up off the skull: two units proud
+               at the nape, six at the crown, and carrying on forward past the
+               hairline into a fringe that overhangs the brow at x=146. That
+               last overhang is the whole of the style, and it is why the crown
+               can stay this low. Volume only on top of the head reads as a hat;
+               breaking the silhouette in *front* of the face reads as a
+               haircut, and it does that at six units as well as at twelve.
+
+               The three curves back down from x=144 are untouched — they are
+               the hairline, and they are what keeps the back of the skull
+               covered from the crown to the collar. Only the top changed. -->
           <template v-else>
             <circle cx="103" cy="94" r="5" fill="#DCA87C" />
             <path
-              d="M100 97A24 24 0 0 1 144 77c-7-4-15-5-20-3-11 4-20 8-22 12-1 4-2 8-2 11z"
+              d="M100 97C97 86 100 74 108 66C116 59 127 57 136 61C143 64 148 66 146 71C145 73 145 75 144 77c-7-4-15-5-20-3-11 4-20 8-22 12-1 4-2 8-2 11z"
               :fill="hair"
             />
-            <circle cx="132" cy="88" r="2.3" :fill="hair" />
+            <!-- The eye. Fixed dark rather than `hair`, which is what it used
+                 to take: it followed along while the hair was black and stopped
+                 working the moment the hair went blond — a gold dot on gold
+                 skin is not an eye. It is the only mark on the figure that sits
+                 on skin rather than against the page, and skin is the one
+                 colour here that does not answer to `tone`, so neither does
+                 this. -->
+            <circle cx="132" cy="88" r="2.3" fill="#16171B" />
           </template>
         </g>
 
-        <!-- Front arm, over the shirt. -->
+        <!-- Front arm, over the shirt — and, since the front thigh moved above
+             it, over the near hip too. Both are what "front" has to mean: the
+             near arm hangs outside the near leg, so in profile it covers it.
+             Painted the other way round the hand went behind the shorts, and a
+             hand at rest is exactly where the shorts are. -->
         <g data-j="armF" data-o="126 124">
-          <rect x="117" y="115" width="18" height="58" rx="9" fill="#F2BF95" />
+          <rect x="117" y="115" width="18" height="64" rx="9" fill="#F2BF95" />
           <rect x="116" y="114" width="20" height="34" rx="10" fill="#FFFFFF" />
-          <g data-j="forearmF" data-o="126 164">
-            <rect x="118" y="156" width="16" height="58" rx="8" fill="#F2BF95" />
-            <circle cx="126" cy="206" r="9" fill="#F2BF95" />
+          <!-- Captain's armband. On the near arm because it is the one that is
+               never behind the shirt, and inside the upper-arm group rather
+               than the forearm's so it swings from the shoulder with the limb
+               it is buckled to. Sat at y=151, three units under the sleeve hem
+               at 148, and a unit wider than the arm on each side — a band sits
+               on top of a sleeve, not flush into it. Red because the sock band
+               and the middle stripe are already that red; a colour of its own
+               would be the only one on the figure. -->
+          <rect x="116" y="151" width="20" height="14" rx="3" fill="#E8402F" />
+          <text
+            class="p-glyph"
+            x="126"
+            y="162"
+            text-anchor="middle"
+            font-family="Arial, Helvetica, sans-serif"
+            font-size="11"
+            font-weight="700"
+            fill="#FFFFFF"
+          >C</text>
+          <g data-j="forearmF" data-o="126 170">
+            <rect x="118" y="162" width="16" height="68" rx="8" fill="#F2BF95" />
+            <circle cx="126" cy="222" r="9" fill="#F2BF95" />
           </g>
         </g>
       </g>
@@ -2221,11 +2323,11 @@ onBeforeUnmount(() => {
         <circle r="22" :fill="`url(#${gid('spec')})`" />
       </g>
 
-      <!-- ── FRONT LEG ───────────────────────────────────────────────────
-           The one that does the work in every pose in the table. -->
+      <!-- ── FRONT LEG, LOWER HALF ───────────────────────────────────────
+           The one that does the work in every pose in the table. Thigh and
+           shorts are painted further up, before the arms; this group is the
+           same joint carrying the knee down. -->
       <g data-j="legF" data-o="120 200">
-        <rect x="104" y="184" width="32" height="91" rx="16" fill="#F2BF95" />
-        <path d="M103 200a17 17 0 0 1 34 0v32h-34z" fill="#1B4FD1" />
 
         <g data-j="shinF" data-o="120 259">
           <rect x="106" y="245" width="28" height="79" rx="14" fill="#F2BF95" />
@@ -2261,6 +2363,22 @@ onBeforeUnmount(() => {
 
 .player--flip {
   transform: scaleX(-1);
+}
+
+/* Everything on the figure is a shape and mirrors happily. Letters do not: the
+   flip turned the 28 on his shorts into a mirror-image 28 and the captain's C
+   into a Ɔ, on Experience and on the footer, which are the two places he faces
+   the other way.
+
+   Mirrored back about their own centres, so they land in exactly the spot the
+   flip put them and only their handedness is undone. `fill-box` is what makes
+   that safe — it resolves the origin against each glyph's own bounding box, so
+   the rule does not have to know where either of them sits, and it keeps
+   working through the joint transforms GSAP writes to their parent groups. */
+.player--flip .p-glyph {
+  transform: scaleX(-1);
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 /* Both layers the ball's own tweens write to, declared once here rather than

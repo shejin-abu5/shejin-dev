@@ -166,6 +166,8 @@ useHead({
       Skip to content
     </a>
 
+    <TheLoader />
+
     <TheScrollBall />
 
     <TheNav />

@@ -106,8 +106,8 @@ export const RIG = {
   /** Shoulders, back and front. The arms hang off these. */
   shoulderB: [114, 124],
   shoulderF: [126, 124],
-  elbowB: [114, 164],
-  elbowF: [126, 164],
+  elbowB: [114, 170],
+  elbowF: [126, 170],
   knee: [120, 259],
   ankle: [120, 310],
   /** Where the feet rest. The shadow sits on it and the ball rolls on it. */
@@ -183,15 +183,23 @@ export const POSES: Record<string, Pose> = {
    * Neutral. Not quite all-zeros: arms dead against the body reads as a doll,
    * so both hang a few degrees clear and the elbows carry a little bend. This
    * is the pose every cameo returns to once its move has played out.
+   *
+   * Both arms are narrower here than they were, and they can be. The swing
+   * used to be doing two jobs: opening the silhouette, which is what it is for,
+   * and carrying the hands out past the shorts, which it should never have had
+   * to do — the hands stopped at the waistband, so the only way to see one was
+   * to hold it away from the body. With the arms reaching the thigh and the
+   * near one painted over the near hip, both hands land on the leg where they
+   * belong, and the swing goes back to being 7° of "not a doll".
    */
   stand: {
     joints: {
       torso: 0,
       head: 0,
-      armB: 9,
-      forearmB: 12,
-      armF: -9,
-      forearmF: 10,
+      armB: 7,
+      forearmB: 8,
+      armF: -7,
+      forearmF: -3,
       legB: 3,
       shinB: 2,
       legF: -3,
@@ -208,15 +216,19 @@ export const POSES: Record<string, Pose> = {
    * eye is supposed to follow. All this pose has to say is *he has seen it*:
    * the head tips right back, the arms come off the body ready to balance, and
    * the standing knee softens the way it does before you take a touch.
+   *
+   * Wider through the arms than `stand` and narrower than it used to be, for
+   * the reason given there. "Ready to balance" is the whole of what these two
+   * are saying, and 16° of it says it on an arm that reaches the thigh.
    */
   watch: {
     joints: {
       torso: -4,
       head: -26,
-      armB: 16,
-      forearmB: 14,
-      armF: -15,
-      forearmF: 12,
+      armB: 12,
+      forearmB: 4,
+      armF: -12,
+      forearmF: -4,
       legB: 5,
       shinB: 6,
       legF: -7,

@@ -54,6 +54,22 @@ export default defineNuxtConfig({
         { rel: 'canonical', href: 'https://shejinabu.com/' }
       ],
 
+      // The escape hatch for the loading screen — see components/TheLoader.vue.
+      //
+      // The overlay is rendered by default so that it is in the served HTML and
+      // covers the first paint rather than arriving over a page the reader has
+      // already seen. The cost of that is a reader with scripting off, for whom
+      // nothing ever runs `lift`: this site's content is static HTML and reads
+      // perfectly well without JS, and the loader would be the one thing
+      // standing in front of it, forever.
+      //
+      // Here rather than in the component because it has to survive into the
+      // rendered markup — Vue refuses a `<style>` inside a client template, and
+      // a `<noscript>` that only exists once JS has run is no `<noscript>` at
+      // all. `!important` because it is overruling the component's own scoped
+      // rule, which carries an extra attribute selector's worth of specificity.
+      noscript: [{ children: '<style>.loader{display:none!important}</style>' }],
+
       // Umami — page views, plus the custom events fired through
       // `composables/track.ts` (CV downloads, contact clicks, outbound project
       // links, read depth). Cookieless and it stores no personal data, which is

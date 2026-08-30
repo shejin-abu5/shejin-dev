@@ -13,6 +13,28 @@ html {
   scroll-behavior: smooth;
 }
 
+/* No sideways scroll, ever. The page is built out of pinned frames, an
+   oversized headline track and a player deliberately wider than his box, and
+   any one of them rounding a fraction of a pixel past the viewport is enough
+   for the browser to put a horizontal scrollbar across the bottom — which on a
+   short laptop screen then costs 15px of height off every `h-screen` frame as
+   well as being an axis nothing on this site scrolls on.
+
+   `clip` rather than `hidden`, and that is the whole reason this is safe here:
+   `overflow: hidden` would make the element a scroll container, which breaks
+   `position: sticky` on the hero and hands ScrollTrigger a second scroller to
+   argue with. `clip` creates no scroll container at all — it only refuses to
+   paint past the edge — and it leaves the other axis as `visible` instead of
+   computing it to `auto`, so the page scrolls down exactly as before.
+
+   On both html and body: propagation from one to the other stops the moment
+   either has a non-visible overflow of its own, and SkillsSection's drawer
+   sets `overflow: hidden` inline on <html> for as long as it is open. */
+html,
+body {
+  overflow-x: clip;
+}
+
 :root {
   /* How wide the footballer is wherever he appears in a section — Selected
      Work, Experience, Skills, Education, the footer.

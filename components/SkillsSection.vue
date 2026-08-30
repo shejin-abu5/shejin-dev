@@ -681,9 +681,9 @@ onBeforeUnmount(() => {
           <div class="mx-auto max-w-[1240px] px-5 md:px-8">
             <div class="sk-head">
               <div>
-                <span class="block font-data text-[13px] tracking-wide text-accent-text">03 — Stack</span>
+                <!-- <span class="block font-data text-[13px] tracking-wide text-steel">03 — Stack</span> -->
                 <h2 id="sk-drawer-title" class="mt-2 font-display text-[clamp(22px,3vw,34px)] font-black uppercase leading-none tracking-tight">
-                  The full stack
+                  full stack
                 </h2>
               </div>
 

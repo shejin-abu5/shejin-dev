@@ -816,6 +816,11 @@ onBeforeUnmount(() => {
     font-family: theme('fontFamily.data');
     font-size: 12px;
     white-space: nowrap;
+    /* Ramps 400 → 700 alongside the darkening, so an open card's dates read as
+       bold on the ruler. IBM Plex Mono is loaded at 400/500/700, so the render
+       steps through those three rather than sweeping — but every weight shares
+       one advance width, so the label cannot drift off its tick as it thickens. */
+    font-weight: calc(400 + var(--on, 0) * 300);
     color: theme('colors.steel');
     color: color-mix(
       in srgb,

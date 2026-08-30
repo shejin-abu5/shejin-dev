@@ -676,7 +676,7 @@ onBeforeUnmount(() => {
       <div class="reveal mb-9 flex flex-wrap items-end justify-between gap-6 md:mb-11">
         <div>
           <span class="mb-3.5 block font-data text-[13px] tracking-wide md:text-accent-text text-steel/60">
-            01 — Selected work
+            01 — work
           </span>
           <h2 class="font-display text-[clamp(30px,4.5vw,58px)] font-black uppercase leading-none tracking-tight">
             Selected Work

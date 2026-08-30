@@ -400,7 +400,7 @@ onMounted(() => {
     </div>
 
     <div class="relative z-10 mx-auto max-w-[1240px] px-5 md:px-8">
-      <span class="mb-3.5 block font-data text-[13px] tracking-wide text-accent">
+      <span class="mb-3.5 block font-data text-[13px] tracking-wide text-steel">
         04 — Get in touch
       </span>
 
@@ -434,7 +434,7 @@ onMounted(() => {
       </h2>
 
       <p class="footer-fade mt-6 max-w-[520px] md:text-[18px] text-[14px] leading-relaxed text-white/60">
-        hire me to juggle ⚽
+        hire me to show some skills
       </p>
 
       <div class="footer-fade md:mt-9 mt-1 flex flex-wrap items-center gap-x-8 md:gap-y-4 gap-y-10">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { gsap } from 'gsap'
 import { useBallPerch } from '~/composables/useScrollBall'
+import { whenPageReady } from '~/composables/usePageReady'
 
 const wrapRef = ref<HTMLElement | null>(null)
 const trackRef = ref<HTMLElement | null>(null)
@@ -46,8 +47,8 @@ const INTRO_WORDS = INTRO_SEGMENTS.flatMap((segment) =>
 // what can go in here. They are read aloud as one sentence — see the
 // screen-reader line in the template — so a fragment that only works in a
 // list would come out of a screen reader as broken English.
-const LOVE_LEAD = 'Love to'
-const LOVE_WORDS = ['problems', 'solve', 'execute', 'ship']
+const LOVE_LEAD = 'Obsessed to'
+const LOVE_WORDS = ['problems', 'solve', 'execute', 'ship', 'football']
 
 // How long a verb sits still, and how long it takes to change.
 //
@@ -272,7 +273,21 @@ onMounted(() => {
   // heading has finished rising, and a hand-tuned delay would silently drift
   // out of sync the moment any duration or stagger below is touched — so the
   // heading's real end is captured as a label and the reminder hangs off it.
-  const intro = gsap.timeline({ delay: 0.15 })
+  //
+  // Built paused and released by the loader — see composables/usePageReady.ts.
+  // Playing it on mount instead is the obvious version and it is wrong now that
+  // there is a loading screen: this is a clock, not a scrub, so it would run to
+  // completion under the overlay and the reader would arrive at a hero that had
+  // already finished. Nothing else here needs the gate, because everything else
+  // is scroll-driven and a reader cannot scroll past a loader.
+  //
+  // `from` tweens still render their start values immediately on a paused
+  // timeline — that is GSAP's `immediateRender` default and it is what this
+  // relies on. Without it the fades below would sit at full opacity until the
+  // gate lifted and then snap to zero to begin, which is a flash in the one
+  // frame the overlay stops covering.
+  const intro = gsap.timeline({ delay: 0.15, paused: true })
+  whenPageReady(() => intro.play())
 
   // Both stacked copies start at position 0 so the ghost and the ink layer
   // rise in lockstep — staggering them relative to each other would offset
@@ -1013,6 +1028,28 @@ onUnmounted(() => {
    else on the line. */
 .hero-slogan-sep {
   white-space: nowrap;
+  /* Turning, always — the one thing on this line that is not waiting for a
+     scroll. Linear and slow: an eased spin reads as something being *thrown*,
+     which would compete with the words swapping beside it, and at six seconds
+     a revolution it is a texture rather than an event.
+
+     Safe to run unconditionally on transform: the line is `display: flex`, so
+     this span is already a flex item and needs no `inline-block` to be
+     transformable, and a transform never feeds back into layout — the glyph
+     turns inside the box it already occupied. Nothing in script touches this
+     element either (the slogan tween takes .hero-slogan-line, -swap and
+     -word), so there is no transform for GSAP to fight over.
+
+     No `prefers-reduced-motion` gate, matching the rest of the site — see
+     BALL_QUERY in composables/useScrollBall.ts for why that gating was
+     dropped everywhere. */
+  animation: hero-slogan-sep-spin 6s linear infinite;
+}
+
+@keyframes hero-slogan-sep-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .hero-slogan-lead {
