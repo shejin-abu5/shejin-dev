@@ -10,6 +10,7 @@ import infinitiImg from '~/assets/img/works/infiniti.webp'
 import petrominImg from '~/assets/img/works/Nissan-KSA-Petromin.webp'
 import nismoImg from '~/assets/img/works/patrol-nismo.webp'
 import smartImg from '~/assets/img/works/smart.webp'
+import ricochet from '~/assets/img/works/Ricochet.webp'
 
 interface Project {
   brand: string
@@ -66,7 +67,6 @@ const projects: Project[] = [
     demoLabel: null,
     image: smartImg
   },
-  
   {
     brand: 'INFINITI',
     title: 'Inventory Tool',
@@ -77,16 +77,26 @@ const projects: Project[] = [
     demoLabel: null,
     image: infinitiImg
   },
-  {
-    brand: 'Nissan',
-    title: 'Patrol Nismo Microsite',
-    summary: 'Microsite for the Nissan Patrol Nismo in MEA markets, including the Arabic/English RTL layout.',
-    tech: 'Vue · GSAP',
-    demoUrl: null,
-    liveUrl: 'https://en.patrolnismo.nissan-dubai.com/',
+    {
+    brand: 'Ricochet',
+    title: 'Complete Football Platform',
+    summary: 'Full-stack football platform for matches, teams, and tournaments management.',
+    tech: 'React',
+    demoUrl: 'https://github.com/shejin-abu5/-Ricochet/',
+    liveUrl: null,
     demoLabel: null,
-    image: nismoImg
-  }
+    image: ricochet
+  },
+  // {
+  //   brand: 'Nissan',
+  //   title: 'Patrol Nismo Microsite',
+  //   summary: 'Microsite for the Nissan Patrol Nismo in MEA markets, including the Arabic/English RTL layout.',
+  //   tech: 'Vue · GSAP',
+  //   demoUrl: null,
+  //   liveUrl: 'https://en.patrolnismo.nissan-dubai.com/',
+  //   demoLabel: null,
+  //   image: nismoImg
+  // }
 ]
 
 // Each card shows one link: the production URL when the work is live, the

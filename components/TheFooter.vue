@@ -371,10 +371,20 @@ onMounted(() => {
        At 64px and 120px the band holds the whole of that crop on a phone and a
        tablet, and on a desktop the mark still runs up behind the labels, which
        is what it has always done and is meant to do. -->
+  <!-- The clip is the document's bottom edge, and it is load-bearing on a
+       phone. The cameo stands on that edge and his SVG is deliberately
+       `overflow: visible` — an overhead kick leaves the viewBox — so his ink
+       ran 19px past the footer into scrollable space nothing painted, which
+       showed on iOS as a white band under him: the body's paper through the
+       gap between the last background and the end of the scroll. Clipping
+       here costs nothing visible, because everything below this line is off
+       the end of the page. `clip` rather than `hidden` for the reason given
+       in main.css — it creates no scroll container, so sticky still sticks
+       and ScrollTrigger is not handed a second scroller. -->
   <footer
     id="contact"
     ref="footerRef"
-    class="relative bg-ink pb-16 pt-16 text-paper md:pb-[120px] md:pt-[120px]"
+    class="relative overflow-y-clip bg-ink pb-16 pt-16 text-paper md:pb-[120px] md:pt-[120px]"
   >
     <!-- The name, set as large as the frame allows and run off the bottom of
          the document.
@@ -421,8 +431,19 @@ onMounted(() => {
 
          Inset to the container's own padding (`px-5 md:px-8`) instead of to
          the viewport, so he lines up with the edge the wordmark and the rule
-         end on rather than floating a few px outside it. -->
-    <div class="player-glow pointer-events-none absolute bottom-0 right-5 w-[104px] md:right-8 md:w-[150px] lg:hidden">
+         end on rather than floating a few px outside it.
+
+         120 on a phone and back to 104 from `sm`, which is one step and pays
+         for itself twice over. What he has to stay out of is the row of social
+         links, and that row moves: below 640 it wraps onto its own line at the
+         left and ends at a fixed x=195 whatever the viewport, so the only width
+         that matters is the narrowest one — his ink is 56% of this box and
+         starts 17.4% into it, which leaves 6px between his shoulder and "Email"
+         on a 320px phone and 46px by 360. From 640 the row stops wrapping and
+         sits at the far right, on him: his ink is 1.33 box-widths tall from the
+         bottom edge, and at 120 that puts his head through "GitHub" at 700.
+         Hence the reset rather than one number for both. -->
+    <div class="player-glow pointer-events-none absolute bottom-0 right-5 w-[140px] sm:w-[104px] md:right-8 md:w-[150px] lg:hidden">
       <!-- The tap is the one cameo with no ball in it — he is waiting, not
            reacting — so it is the one move that still means what it meant at a
            width where the page's ball never enters play. See `gate` in
