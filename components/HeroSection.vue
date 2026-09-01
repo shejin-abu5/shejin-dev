@@ -582,8 +582,13 @@ onMounted(() => {
     // GSAP is applying to this very element.
     const distance = () => Math.max(0, track.offsetWidth - window.innerWidth + gutter() * 2)
 
-    // One shared config: the heading slides and fills from the same scrub,
-    // so the ink can never drift out of step with the travel.
+    // One window, two scrubs. The slide and the fill are mapped over the same
+    // stretch of scroll — same trigger, same start, same end — so they cannot
+    // disagree about where the read begins or ends, and both are exact at both
+    // ends. What differs is how hard each one is filtered on the way through,
+    // and that difference is the effect: the ink is given a longer catch-up
+    // than the track, so the colour trails the letters while the wheel is
+    // turning and settles onto its true position a moment after it stops.
     //
     // The end used to be `bottom bottom`, which is the scroll position where
     // the spacer's foot meets the viewport's — i.e. `+=(spacer − viewport)`.
@@ -597,39 +602,72 @@ onMounted(() => {
     //
     // Written against the measured elements so it stays true at both widths;
     // `invalidateOnRefresh` re-resolves it when the breakpoint is crossed.
-    const scrollTrigger = {
+    const read = (scrub: number) => ({
       trigger: wrap,
       start: 'top top',
       end: () => `+=${Math.max(1, wrap.offsetHeight - frame.offsetHeight)}`,
-      scrub: 0.5,
+      scrub,
       invalidateOnRefresh: true
-    }
+    })
 
-    // The real <h1> is revealed over the grey ghost underneath it. The
-    // starting clip is set here rather than in CSS on purpose: if this
-    // script never runs, the heading stays plainly visible instead of
-    // being clipped to nothing.
-    const ink = track.querySelector('.hero-ink')
+    // Seconds of catch-up, not durations: a numeric scrub is how long GSAP
+    // takes to ease onto the position the scrollbar is asking for.
+    //
+    // The track keeps the 0.5 it has always had, and the stylesheet's note
+    // about `scrub` trading judder against the headline lagging the scroll is
+    // about this number specifically — raising it moves the *type*, and type
+    // that arrives late reads as the page being slow to answer. The ink's is
+    // deliberately laggier, and it can be, because a soft-edged wipe arriving
+    // late does not read as lag at all: there is no hard boundary to measure
+    // the delay against, so it reads as the colour soaking into the letters a
+    // beat behind them rather than as the page dragging.
+    const TRACK_SCRUB = 0.5
+    const INK_SCRUB = 1.2
+
+    // The real <h1> is inked in over the grey ghost underneath it. The starting
+    // value is set here rather than in CSS on purpose: if this script never
+    // runs, the heading stays plainly visible instead of being masked to
+    // nothing.
+    const ink = track.querySelector('.hero-ink') as HTMLElement | null
+
+    // How wide the fade at the head of the wipe is, in the percent-of-the-track
+    // units the fill itself runs in. Read off the element rather than repeated
+    // here, so `.hero-ink` in the stylesheet stays the one place it is set —
+    // the same reason the gutter is read off .hero-pad rather than hardcoded.
+    const soft = ink ? parseFloat(getComputedStyle(ink).getPropertyValue('--fill-soft')) || 0 : 0
+
+    // The fill runs from -soft to 100 rather than 0 to 100, because the mask's
+    // two stops are `--fill` and `--fill + --fill-soft`: at -soft the trailing
+    // stop sits on the track's left edge and none of it is inked, and at 100 the
+    // leading stop sits on its right edge and all of it is. Both ends have to be
+    // exact — the track's right edge is still on screen when the read finishes,
+    // so an end of 100 would leave the last word under the fade.
+    const fillAt = (p: number) => -soft + p * (100 + soft)
 
     if (!phone) {
       gsap.fromTo(
         track,
         { x: 0 },
-        { x: () => -distance(), ease: 'none', scrollTrigger }
+        { x: () => -distance(), ease: 'none', scrollTrigger: read(TRACK_SCRUB) }
       )
 
       gsap.fromTo(
         ink,
-        { clipPath: 'inset(0 100% 0 0)' },
-        { clipPath: 'inset(0 0% 0 0)', ease: 'none', scrollTrigger }
+        { '--fill': fillAt(0) },
+        { '--fill': fillAt(1), ease: 'none', scrollTrigger: read(INK_SCRUB) }
       )
       return
     }
 
-    // The phone runs the same slide with a hold cut into the middle of it, on
-    // one timeline rather than two tweens — the slide and the fill have to stop
-    // and start together, and two independently scrubbed tweens agreeing about
-    // when to pause is a coincidence waiting to come apart.
+    // The phone runs the same slide with a hold cut into the middle of it.
+    //
+    // Two timelines rather than the one this was, because the slide and the
+    // fill now scrub at different rates and a timeline carries one scrub. They
+    // are still not two independent readings of the hold: both are laid out
+    // from the same HOLD_FROM/HOLD_TO below, so the stillness falls at the same
+    // fraction of the read in each and the only thing between them is the ink's
+    // catch-up. Writing the ink's positions as second copies of those numbers
+    // instead is what would put them at risk of coming apart.
     //
     // The travel is split in the same proportion as the two moving stretches,
     // which is what keeps the headline's speed identical either side of the
@@ -639,35 +677,41 @@ onMounted(() => {
     const moving = HOLD_FROM + (1 - HOLD_TO)
     const before = HOLD_FROM / moving
 
-    // Positions and durations below are fractions of the whole read, and they
-    // add to exactly 1 — a scrub maps the scroll window onto whatever duration
-    // the timeline happens to have, so a total of anything else silently
-    // rescales every number here.
-    const tl = gsap.timeline({ scrollTrigger })
+    // The hold, and it goes in both timelines. An empty tween, because a gap in
+    // a timeline is not a pause — a scrub interpolates across unoccupied time
+    // exactly as if it were not there, so the stillness has to be something the
+    // timeline is actually doing. A factory rather than one shared object: two
+    // tweens handed the same vars is a mutation waiting to happen.
+    const hold = () => ({ duration: HOLD_TO - HOLD_FROM })
 
-    tl.fromTo(
-      track,
-      { x: 0 },
-      { x: () => -distance() * before, ease: 'none', duration: HOLD_FROM },
-      0
-    )
+    // Positions and durations below are fractions of the whole read, and each
+    // timeline's add to exactly 1 — a scrub maps the scroll window onto
+    // whatever duration the timeline happens to have, so a total of anything
+    // else silently rescales every number here. That is why the ink carries the
+    // hold too: an ink timeline built from only its two moving stretches would
+    // total `moving`, stretch to fill the same window, and run at a different
+    // rate to the slide rather than a fixed beat behind it.
+    gsap
+      .timeline({ scrollTrigger: read(TRACK_SCRUB) })
       .fromTo(
-        ink,
-        { clipPath: 'inset(0 100% 0 0)' },
-        {
-          clipPath: `inset(0 ${((1 - before) * 100).toFixed(2)}% 0 0)`,
-          ease: 'none',
-          duration: HOLD_FROM
-        },
+        track,
+        { x: 0 },
+        { x: () => -distance() * before, ease: 'none', duration: HOLD_FROM },
         0
       )
-      // The hold. An empty tween, because a gap in a timeline is not a pause —
-      // a scrub interpolates across unoccupied time exactly as if it were not
-      // there, so the stillness has to be something the timeline is actually
-      // doing.
-      .to({}, { duration: HOLD_TO - HOLD_FROM }, HOLD_FROM)
+      .to({}, hold(), HOLD_FROM)
       .to(track, { x: () => -distance(), ease: 'none', duration: 1 - HOLD_TO }, HOLD_TO)
-      .to(ink, { clipPath: 'inset(0 0% 0 0)', ease: 'none', duration: 1 - HOLD_TO }, HOLD_TO)
+
+    gsap
+      .timeline({ scrollTrigger: read(INK_SCRUB) })
+      .fromTo(
+        ink,
+        { '--fill': fillAt(0) },
+        { '--fill': fillAt(before), ease: 'none', duration: HOLD_FROM },
+        0
+      )
+      .to({}, hold(), HOLD_FROM)
+      .to(ink, { '--fill': fillAt(1), ease: 'none', duration: 1 - HOLD_TO }, HOLD_TO)
   })
 
   // The phone's spinning orb used to live here, and the player has taken its
@@ -836,8 +880,8 @@ onUnmounted(() => {
    would come up short and hand back a strip of the spacer, which is the bug
    this is fixing. Overshooting instead only crops the air below the ball.
 
-   The spacer moves with it: the pinned scrub is `spacer − frame` (see
-   `scrollTrigger` in <script>), so 116vh over a 50svh frame and 166vh over a
+   The spacer moves with it: the pinned scrub is `spacer − frame` (see `read`
+   in <script>), so 116vh over a 50svh frame and 166vh over a
    full one are the same ~66vh of slide. Change one without the other and the
    heading's travel speeds up or slows down. */
 @media (max-width: 767px) {
@@ -874,21 +918,62 @@ onUnmounted(() => {
   }
 }
 
-/* Stood on the floor of the pinned frame.
+/* The wipe that inks the heading in as it slides.
 
-   Bottom-left rather than centred, and that is about the headline rather than
-   about him: the track is `w-max` and starts flush with the gutter, so at
-   scroll 0 the type occupies the top-left and runs off the right edge. A figure
-   under the middle of the frame stands under a gap; a figure at the left stands
-   under the word, and the volley then travels up and to the right into the
-   space the heading is about to vacate as it slides.
+   A mask rather than the `clip-path: inset()` this was, and the whole of the
+   difference is the edge. A clip cuts at a hard vertical line, and a hard line
+   is the ideal landmark for the eye to measure motion against — which is a
+   problem here specifically, because the edge and the type move in opposite
+   directions at a combined 3.2px per px of scroll (the fill sweeps the track's
+   full width while the track itself travels only a screen). Every wobble in
+   scroll velocity is tripled at that boundary and the crisp edge makes all of
+   it legible, which is what reads as the fill juddering.
 
-   Sized against the viewport's width *and* its height, which is what the inner
-   `min()` is for. What he must not do is reach the headline, and the headline's
-   position is a function of height while his own size would otherwise be a
-   function of width — so the two are only safely apart at the aspect ratios you
-   happened to test. Measured at 1600×900, sized on width alone at this scale he
-   stood with his head inside the word FRONTEND; the 38vh arm is what holds him
+   The wobble is not this component's to remove, and that was measured before
+   this was written: the scroll arriving from a mouse wheel already pulses about
+   8:1 within each notch, because Chrome eases every notch on its way in, and
+   GSAP's numeric `scrub` filters only part of that — every value from
+   `scrub: true` to `scrub: 1` trades the pulse against the headline trailing
+   after the scroll has stopped, and none of them wins on both. What is left is
+   to stop drawing a razor edge across it. The same motion under a soft edge
+   reads as smooth, because there is no longer a hard reference to see it
+   against.
+
+   That soft edge is also what lets the wipe be scrubbed slower than the type it
+   crosses (TRACK_SCRUB against INK_SCRUB in <script>). The trade above is about
+   the *headline* trailing the scroll, and the fill is not the headline: with no
+   hard boundary to time it against, ink that lands a beat late reads as colour
+   soaking into the letters rather than as the page answering slowly.
+
+   Two stops driven by one custom property, rather than an animated
+   `mask-position` on a fixed gradient: the fill has to land exactly on both
+   ends of the track (see `fillAt` in <script>) and a moving background would
+   have to be sized against a track whose width is a fluid font size. */
+.hero-ink {
+  /* The fade's width, as a percentage of the track — not of the viewport, which
+     is why one number holds at every width: the track *is* the headline, so it
+     scales with the type, and 1% lands within a hair of 0.17em of the heading's
+     own size on both a phone and a desktop. About a fifth of a letter's stem,
+     which softens the edge without reading as a gradient of its own. */
+  --fill-soft: 1;
+
+  /* Fully inked. The scrubbed read in <script> takes this from -1 to 100, and
+     starting at the finished state is what leaves the heading plainly readable
+     if that script never runs. */
+  --fill: 100;
+
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 calc(var(--fill) * 1%),
+    transparent calc((var(--fill) + var(--fill-soft)) * 1%)
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 calc(var(--fill) * 1%),
+    transparent calc((var(--fill) + var(--fill-soft)) * 1%)
+  );
+}
+  /* inside the word FRONTEND; the 38vh arm is what holds him
    clear on a short, wide screen without shrinking him on a tall one.
 
    The figure is ~1.42 units tall for every 1 wide, so 38vh of width is ~54vh of

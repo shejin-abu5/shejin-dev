@@ -59,8 +59,8 @@ const projects: Project[] = [
   },
   {
     brand: 'Nissan',
-    title: 'Smart Test Drive',
-    summary:' Smart Test Drive tool for great customer experience journey.',
+    title: 'Smart Guided Test Drive',
+    summary:' Smart Test Drive tool for great customer experience journey with Google Maps API.',
     tech: 'Vue.js · Google Maps API',
     demoUrl: null,
     liveUrl: null,
@@ -80,7 +80,7 @@ const projects: Project[] = [
     {
     brand: 'Ricochet',
     title: 'Complete Football Platform',
-    summary: 'Full-stack football platform for matches, teams, and tournaments management.',
+    summary: 'A total football platform for matches, teams, and tournaments management.',
     tech: 'React',
     demoUrl: 'https://github.com/shejin-abu5/-Ricochet/',
     liveUrl: null,

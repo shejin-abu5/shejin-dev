@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReveal } from '~/composables/useReveal'
@@ -390,7 +391,31 @@ useBallPerch(() => touchRef.value, {
 const open = ref(false)
 const scrimRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
-const closeRef = ref<HTMLElement | null>(null)
+
+/*
+  The cards, fetched before the panel opens rather than while it is sliding.
+
+  This was <LazySkillsSectionCard>, mounted by the same v-if as the panel, and
+  the chunk landed mid-slide: measured at ~54ms into a 620ms tween, the panel
+  went from a 125px header stub to its full 792px in a single frame. yPercent is
+  a percentage of the element's *own height*, so the transform jumped with it and
+  the sheet lurched ~380px up the screen in flight — the shake.
+
+  Holding the resolved component in a shallowRef rather than handing the loader
+  to defineAsyncComponent is what makes the fix complete. Either way the module
+  is cached after the first fetch, but an async component still resolves through
+  a microtask, so the panel would render once without it and once with — the same
+  jump, a frame later. Awaited into a ref, the cards are simply part of the first
+  render, and the box the tween measures is the right size from its first frame.
+*/
+const CardsComp = shallowRef<Component | null>(null)
+let cardsWarm: Promise<unknown> | null = null
+
+function warmCards() {
+  return (cardsWarm ??= import('./SkillsSection-card.vue').then((m) => {
+    CardsComp.value = m.default
+  }))
+}
 
 /** Whatever had focus when the drawer opened, so it can be handed back. */
 let opener: HTMLElement | null = null
@@ -440,9 +465,23 @@ function onKeydown(e: KeyboardEvent) {
   const panel = panelRef.value
   if (!panel) return
 
+  /*
+    `getClientRects` is what keeps the two ends of this list real.
+
+    The dots under the card rail are `display: none` above 1023px — see
+    .swipe-dots in assets/css/main.css — but a display:none button still reports
+    `tabIndex === 0`, because tabIndex reflects the attribute rather than whether
+    anything is rendered. So on a desktop width the last ten entries here were
+    dots nobody can reach, `last` was one of them, and `last.focus()` silently
+    did nothing: shift-Tab off the close button left focus exactly where it was.
+    A rect-less element is one the browser will not focus, so requiring a rect is
+    the same test the focus call itself applies.
+  */
   const items = Array.from(
     panel.querySelectorAll<HTMLElement>('a[href], button, [tabindex]')
-  ).filter((el) => el.tabIndex >= 0 && !el.hasAttribute('disabled'))
+  ).filter(
+    (el) => el.tabIndex >= 0 && !el.hasAttribute('disabled') && el.getClientRects().length > 0
+  )
 
   if (!items.length) return
 
@@ -450,9 +489,18 @@ function onKeydown(e: KeyboardEvent) {
   const last = items[items.length - 1]
   const activeEl = document.activeElement
 
-  // Also catches focus having escaped the panel entirely — if it is somewhere
-  // else on the page, the next Tab pulls it back to an end of this list.
-  if (e.shiftKey && (activeEl === first || !panel.contains(activeEl))) {
+  /*
+    Both branches also catch focus having escaped the panel entirely — if it is
+    somewhere else on the page, the next Tab pulls it back to an end of this list.
+
+    `activeEl === panel` is the open state: the panel holds focus itself until the
+    first Tab. It counts as standing before the first item, not inside the list —
+    `contains` is true of the element itself, so without this a backwards Tab off
+    the freshly-opened panel would fall through to the browser and walk straight
+    out of the dialog into the page behind the scrim. Forwards needs no such case:
+    the default already moves from the container to the first item inside it.
+  */
+  if (e.shiftKey && (activeEl === first || activeEl === panel || !panel.contains(activeEl))) {
     e.preventDefault()
     last.focus()
   } else if (!e.shiftKey && (activeEl === last || !panel.contains(activeEl))) {
@@ -465,6 +513,16 @@ async function openDrawer() {
   if (open.value) return
 
   opener = (document.activeElement as HTMLElement | null) ?? null
+
+  // Almost always already settled — see the warm calls on the button and on the
+  // observer below — so this costs a microtask rather than a fetch.
+  await warmCards()
+
+  // The await above is a suspension point, so a second click can land inside it.
+  // Both callers get past the guard at the top, but the continuations run in
+  // order: the first sets `open`, and this is what the second one trips on.
+  if (open.value) return
+
   open.value = true
   lockScroll()
   window.addEventListener('keydown', onKeydown)
@@ -481,7 +539,22 @@ async function openDrawer() {
     { yPercent: 0, duration: 0.62, ease: 'expo.out' }
   )
 
-  closeRef.value?.focus()
+  /*
+    The panel itself takes focus, not the close button.
+
+    Focusing the button left it painted as though it had been pressed: focus
+    lands under whatever modality opened the drawer, so a keyboard open matched
+    :focus-visible and the button arrived accent-orange on a filled ground —
+    measured rgb(204,61,16) on paper-soft — with nothing having been clicked. A
+    mouse open left it steel, so the control's appearance depended on how the
+    visitor got there.
+
+    The container is the WAI-ARIA pattern for a dialog anyway, and it keeps the
+    ring honest: nothing is lit on arrival, and a keyboard visitor's first Tab
+    puts a real focus ring on the close button. preventScroll because the panel
+    is its own scroller — focusing it is not a request to move it.
+  */
+  panelRef.value?.focus({ preventScroll: true })
 }
 
 function closeDrawer() {
@@ -528,7 +601,15 @@ onMounted(() => {
   */
   if (latticeRef.value) {
     io = new IntersectionObserver(
-      ([entry]) => (entry.isIntersecting ? start() : stop()),
+      ([entry]) => {
+        if (!entry.isIntersecting) return stop()
+        start()
+        // The section arriving is the earliest honest signal that the drawer
+        // might be wanted, and it is far enough ahead of any possible click that
+        // even a touch visitor — who has no hover to warm on — opens against a
+        // cached chunk. Idempotent, so re-entering the section costs nothing.
+        warmCards()
+      },
       { rootMargin: '120px' }
     )
     io.observe(latticeRef.value)
@@ -619,10 +700,17 @@ onBeforeUnmount(() => {
                the full list. `aria-haspopup="dialog"` rather than
                `aria-expanded`: what opens is a modal panel, not a region of
                this section that grows. -->
+          <!-- Warmed on the first sign of intent, so the await in openDrawer is
+               a settled promise by the time the click lands. pointerenter covers
+               the mouse and focus covers the keyboard; touch gets its head start
+               from the observer in onMounted instead, which fires a whole
+               section earlier. -->
           <button
             type="button"
             class="skills-more"
             aria-haspopup="dialog"
+            @pointerenter="warmCards"
+            @focus="warmCards"
             @click="openDrawer"
           >
             View more
@@ -677,7 +765,10 @@ onBeforeUnmount(() => {
       <div v-if="open" class="sk-drawer" role="dialog" aria-modal="true" aria-labelledby="sk-drawer-title">
         <div ref="scrimRef" class="sk-scrim" @click="closeDrawer" />
 
-        <div ref="panelRef" class="sk-panel">
+        <!-- tabindex="-1" so the panel can take the opening focus itself. See
+             the note in openDrawer: focusing the close button instead left it
+             painted as pressed on a keyboard open. -->
+        <div ref="panelRef" class="sk-panel" tabindex="-1">
           <div class="mx-auto max-w-[1240px] px-5 md:px-8">
             <div class="sk-head">
               <div>
@@ -687,7 +778,7 @@ onBeforeUnmount(() => {
                 </h2>
               </div>
 
-              <button ref="closeRef" type="button" class="sk-close" @click="closeDrawer">
+              <button type="button" class="sk-close" @click="closeDrawer">
                 <span class="sr-only">Close</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
                   <path d="m6.5 6.5 11 11" />
@@ -698,12 +789,13 @@ onBeforeUnmount(() => {
 
             <!-- <p class="sk-lede">Nine categories. Turn a card for what is under it.</p> -->
 
-            <!-- Lazy so the nine cards and their chip lists are a chunk that is
-                 only fetched by someone who asks for them, and `v-if` so the
-                 grid mounts on open — which is what its entry stagger runs on,
-                 there being no scroll position inside a fixed panel to trigger
-                 the usual reveal from. -->
-            <LazySkillsSectionCard />
+            <!-- Still its own chunk, so the cards and their chip lists are not
+                 in the initial payload — but resolved before the panel mounts
+                 rather than while it slides, so the sheet is full height on its
+                 first frame. The grid still mounts on open, which is what its
+                 entry stagger runs on, there being no scroll position inside a
+                 fixed panel to trigger the usual reveal from. -->
+            <component :is="CardsComp" v-if="CardsComp" />
           </div>
         </div>
       </div>
@@ -810,6 +902,16 @@ onBeforeUnmount(() => {
   border-radius: 26px 26px 0 0;
   padding-block: 1.75rem 2.25rem;
   box-shadow: 0 -18px 60px rgb(18 18 18 / 0.16);
+}
+
+/* The panel takes the opening focus so that no control has to. It is a
+   container rather than something you operate, and a ring drawn round the whole
+   sheet reads as a rendering fault — the dialog role and the scrim are what
+   announce it. The controls inside keep their own :focus-visible rings, which is
+   where a keyboard visitor's first Tab goes. */
+.sk-panel:focus,
+.sk-panel:focus-visible {
+  outline: none;
 }
 
 @media (min-width: 768px) {
