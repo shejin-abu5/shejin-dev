@@ -4,13 +4,13 @@ const canonical = `${siteUrl}/`
 const ogImage = `${siteUrl}/og-image.png`
 const title = 'Shejin Abu — Senior Frontend / UX Developer in Dubai, UAE'
 const description =
-  'Frontend / UX Developer in Dubai working in Vue.js and React.js. 12+ years shipping automotive and enterprise platforms across the Middle East and Africa, including the Vue.js CMS component library behind the regional sites of global automotive brands.'
+  'Frontend / UX Developer in Dubai working in Vue.js and React.js. 12+ years shipping automotive and enterprise platforms across the Middle East and Africa, including the React.js, Vue.js and CMS component library behind the regional sites of global automotive brands.'
 
 useSeoMeta({
   title,
   description,
   keywords:
-    'Senior Frontend Developer Dubai, Vue.js Developer UAE, React Developer Dubai, Redux Developer UAE, Nuxt 3 Developer Dubai, Frontend Engineer Middle East, Automotive Frontend Developer, UI/UX Developer UAE',
+    'Senior Frontend Developer Dubai, Vue.js Developer UAE, React Developer Dubai, Redux Developer UAE, AI Product Designer, Nuxt 3 Developer Dubai, Frontend Engineer Middle East, Automotive Frontend Developer, UI/UX Developer UAE',
   author: 'Shejin Abu',
 
   // `index, follow` on its own leaves Google's defaults in place, and two of

@@ -16,7 +16,6 @@ interface Project {
   brand: string
   title: string
   summary: string
-  tech: string
   demoUrl: string | null
   liveUrl: string | null
   demoLabel: string | null
@@ -29,7 +28,6 @@ const projects: Project[] = [
     title: 'New Patrol Launch Platform',
     summary:
       'Launch platform for the new Nissan Patrol across Middle East and Africa markets. Built the frontend from Figma designs and the GSAP/WebGL launch animation.',
-    tech: 'Vue.js · GSAP · WebGL',
     demoUrl: null,
     liveUrl: 'https://en.allnewpatrol.nissan-dubai.com/',
     demoLabel: 'allnewpatrol.nissan-dubai.com',
@@ -40,7 +38,6 @@ const projects: Project[] = [
     title: 'Parts e-commerce',
     summary:
       'Storefront for ordering genuine Nissan parts. Built the frontend and connected it to the parts catalog and checkout APIs.',
-    tech: 'Vue.js · Pinia · Tailwind CSS',
     demoUrl: null,
     liveUrl: 'https://parts.nissanghana.com/',
     demoLabel: null,
@@ -51,7 +48,6 @@ const projects: Project[] = [
     title: 'Magnite Microsite',
     summary:
       'Model microsite for the Nissan Magnite, including the Arabic/English RTL layout.',
-    tech: 'GSAP · Tailwind CSS',
     demoUrl: null,
     liveUrl: 'https://en.allnewmagnite.nissan-saudiarabia.com/',
     demoLabel: null,
@@ -61,9 +57,8 @@ const projects: Project[] = [
     brand: 'Nissan',
     title: 'Smart Guided Test Drive',
     summary:' Smart Test Drive tool for great customer experience journey with Google Maps API.',
-    tech: 'Vue.js · Google Maps API',
     demoUrl: null,
-    liveUrl: null,
+    liveUrl: 'https://test-drive.nissan-web-apps.com/en/verify-number?showroomId=0010N00004IfscmQAB',
     demoLabel: null,
     image: smartImg
   },
@@ -71,7 +66,6 @@ const projects: Project[] = [
     brand: 'INFINITI',
     title: 'Inventory Tool',
     summary: 'Dealership-facing tool for browsing vehicle inventory, built on top of the inventory data API.',
-    tech: 'Vue.js · Axios',
     demoUrl: null,
     liveUrl: 'https://www.infiniti-dubai.com/infiniti-certified.html',
     demoLabel: null,
@@ -81,17 +75,15 @@ const projects: Project[] = [
     brand: 'Ricochet',
     title: 'Complete Football Platform',
     summary: 'A total football platform for matches, teams, and tournaments management.',
-    tech: 'React',
     demoUrl: 'https://github.com/shejin-abu5/-Ricochet/',
     liveUrl: null,
-    demoLabel: null,
+    demoLabel: "View on GitHub",
     image: ricochet
   },
   // {
   //   brand: 'Nissan',
   //   title: 'Patrol Nismo Microsite',
   //   summary: 'Microsite for the Nissan Patrol Nismo in MEA markets, including the Arabic/English RTL layout.',
-  //   tech: 'Vue · GSAP',
   //   demoUrl: null,
   //   liveUrl: 'https://en.patrolnismo.nissan-dubai.com/',
   //   demoLabel: null,
@@ -681,7 +673,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section id="work" ref="sectionRef" class="relative py-12 md:py-[120px]">
+  <section id="work" ref="sectionRef" class="relative scroll-mt-[var(--nav-h)] py-12 md:py-[120px]">
     <div ref="headBlockRef" class="relative z-10 mx-auto max-w-[1240px] bg-paper px-5 md:px-8">
       <div class="reveal mb-9 flex flex-wrap items-end justify-between gap-6 md:mb-11">
         <div>
@@ -694,34 +686,6 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- The rail, and the player standing on it.
-
-           He is inside a relative wrapper rather than positioned against the
-           section, so his feet are on the same line the ball rolls along
-           whatever the heading above it wraps to — the margin moved up here
-           with him for the same reason.
-
-           Facing right, unflipped, and standing at DECK_FROM. Both follow from
-           the same fact: the ball enters this rule at the left, rolls right to
-           DECK_FROM, and leaves there for the deck below. So that is where the
-           contact is, and forward is the way the ball is already going. He used
-           to stand at the far right facing left, which put him most of a rule
-           away from the only point on it the ball ever reaches.
-
-           `left` is short of DECK_FROM by the distance from his own left edge to
-           his boot, so it is the *foot* that lands on the handover and not his
-           hip — and it is computed from DECK_FROM rather than stated, because the
-           two are only the same number at one viewport width otherwise. It was
-           `left-[47%]`, which is where DECK_FROM lands on a 1224px rule and not
-           where it lands on any other: at the 1024px the ball exists from at all,
-           the handover point is at x=490 of the rule and 47% of it is 436, so the
-           ball came to rest 31px short of a boot swinging through thin air. See
-           `.work-player`. -->
-      <!-- `mb-5` on a phone rather than the 80px this was. The rule inside is
-           `hidden md:block`, so below md the margin was separating the heading
-           from the deck across an element that isn't drawn — 80px of nothing on
-           top of the row's own 36, which pushed the first card most of a
-           thumbnail lower than it needed to sit. -->
       <div class="relative mb-5 md:mb-28">
         <span ref="railRef" class="hidden h-px w-full bg-hair md:block" aria-hidden="true" />
 
@@ -729,37 +693,11 @@ onBeforeUnmount(() => {
           class="work-player pointer-events-none absolute -bottom-1.5 hidden w-[var(--cameo)] lg:block"
           :style="{ '--contact': DECK_FROM, '--boot': BOOT_AT, '--rail-inset': `${RAIL_INSET}px` }"
         >
-          <!-- Handed the hold's progress on the ball's own clock, rather than
-               scrubbed against the same window separately — so his boot and the
-               ball are two readings of one number rather than two smoothings of
-               one scroll position, which is what they were. See `holdK`. -->
           <ThePlayer move="work" :progress="holdK" />
         </div>
       </div>
     </div>
 
-    <!-- The deck's runway, and it has to live out here rather than on the rule.
-
-         The margin is HOLD_SCROLL, bound from the constant rather than written
-         out again: the two are one number and the whole composition breaks
-         quietly if they drift, so there is no version of this that should be
-         typed twice. (It was `lg:mt-[420px]` beside a comment saying so, which
-         is how the pair survived the hold going to 620.)
-
-         The heading above is pinned
-         without spacing for that distance, so the deck keeps moving while the
-         heading does not — starting a hold's-worth lower is what makes it
-         *arrive* at its normal spacing on the frame the pin releases, rather
-         than riding straight up past the heading and rendering above it.
-
-         It was tried as bottom margin on the rule's wrapper, which is inside
-         the pinned block: ScrollTrigger wraps that block in a `.pin-spacer`
-         with an explicit height, and the child margin no longer collapses
-         through it. The 532px was applied and measured — and the gap it was
-         supposed to produce was 1px. Out here there is no spacer to swallow it.
-
-         Only at `lg`, where the pin runs at all; below that it would be 420px
-         of dead page. -->
     <div
       class="work-runway mx-auto max-w-[1240px] px-5 md:px-8 md:pt-0 pt-3"
       :style="{ '--runway': `${HOLD_SCROLL}px` }"
@@ -768,10 +706,6 @@ onBeforeUnmount(() => {
         <template v-for="(project, i) in cards" :key="project.title">
           <div v-if="i === cards.length - 1" data-stack-end aria-hidden="true" class="h-px w-full" />
 
-          <!-- `--last` opts the final card out of the defocus. Every other card
-               blurs because the next one is climbing over it; nothing climbs
-               over this one, so the same rule would blur the card the reader is
-               still looking at. See `work-card-defocus`. -->
           <article
             class="work-card rounded-[16px] bg-paper p-4 ring-1 ring-hair deck:rounded-[22px] deck:px-8 deck:py-7"
             :class="{ 'work-card--last': i === cards.length - 1 }"
@@ -783,25 +717,6 @@ onBeforeUnmount(() => {
               zIndex: i + 1
             }"
           >
-            <!-- Two layouts. Below `deck` a single column with the shot on
-                 top; from `deck` up, two columns — copy over stack on the
-                 left, shot on the right.
-
-                 It was three: at `xl` the card used to be a row of *three*,
-                 copy | shot | stack. That layout is gone because the container
-                 it lived in is 1240px wide and site-wide (the section heading
-                 above uses the same one), so the third column could only ever
-                 be paid for out of the shot. It cost 555px of shot beside two
-                 247px columns — the picture at half the card, which is not
-                 what this section is for. Folding the stack back under the
-                 copy widens both of the things that matter: the shot to 759
-                 and the copy to 325.
-
-                 `deck` is 900px rather than the 992 it was, and what the move
-                 bought is the swipe rail below it going away — see
-                 tailwind.config.ts. The column is not a fallback down there;
-                 it is the better card, and `--shot-cap` is what keeps it short
-                 enough to pin. -->
             <div class="work-card__grid grid grid-cols-1 items-center gap-3.5 deck:grid-cols-[minmax(0,1fr)_auto] deck:gap-7">
               <div class="reveal min-w-0 deck:self-end">
                 <div class="flex items-center gap-2.5">
@@ -816,10 +731,6 @@ onBeforeUnmount(() => {
                 <p class="mt-2.5 text-[13px] leading-relaxed text-steel deck:mt-3">{{ project.summary }}</p>
               </div>
 
-              <!-- No `w-full`: below `deck` the box is sized from its height —
-                   see `--shot-cap` — and a stretched grid item would override
-                   that back to the container's width, which is the shape that
-                   made the card too tall to pin in the first place. -->
               <figure
                 class="work-hero order-first overflow-hidden rounded-[12px] bg-paper-soft deck:order-none deck:col-start-2 deck:row-span-2 deck:row-start-1 deck:aspect-[3/2]"
               >
@@ -838,35 +749,7 @@ onBeforeUnmount(() => {
                 </div>
               </figure>
 
-              <!-- In the two-column case this sits under the copy rather than
-                   in a column of its own, which is what keeps the shot's height
-                   the card's height.
-
-                   The `pt` is what separates the spec from the copy in one
-                   column — a hairline rule did that job first, and it is out
-                   because the card carries enough lines already: its own ring,
-                   the shot's edge, the deck edges of the cards behind it. The
-                   space says the same thing without adding a fourth. -->
               <div class="work-card__foot reveal min-w-0 pt-3.5 deck:pt-0 deck:col-start-1 deck:row-start-2 deck:self-start">
-                <!-- Label beside the value on a phone, above it from `deck` up.
-                     Stacked, the label costs a 17px line to say what the mono
-                     face and the `·` separators already say; inline it is a
-                     data row, which is the voice the rest of the card is in.
-                     Every stack string fits one line at 12px in the narrowest
-                     card this reaches (310px inner at 390px of frame). -->
-                <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 deck:block">
-                  <span class="font-data text-[10px] uppercase tracking-[0.18em] text-steel">Stack</span>
-                  <p class="font-data text-[12px] leading-relaxed text-ink deck:mt-1.5">{{ project.tech }}</p>
-                </div>
-
-                <!-- Unadorned, so the arrow is what marks it as a link. That
-                     leaves it carried by something other than colour alone,
-                     which is the bar an underline was clearing.
-
-                     `active:` rather than only `hover:`: on the surface this is
-                     now the primary presentation for, there is no hover, and a
-                     44px row that does not acknowledge the tap reads as a dead
-                     one for the length of the page load it kicks off. -->
                 <a
                   v-if="project.link"
                   :href="project.link.url"
@@ -874,20 +757,17 @@ onBeforeUnmount(() => {
                   target="_blank"
                   rel="noopener"
                   @click="track('project-click', { project: project.title })"
-                  class="mt-3 flex min-h-[44px] items-center gap-2 font-data text-[14px] font-medium text-ink no-underline transition-[color,opacity] duration-150 ease-out hover:text-ink/85 active:opacity-60 xl:mt-6 xl:min-h-0"
+                  class="flex min-h-[44px] items-center gap-2 font-data text-[14px] font-medium text-ink no-underline transition-[color,opacity] duration-150 ease-out hover:text-ink/85 active:opacity-60 xl:min-h-0"
                 >
                   <span class="min-w-0 truncate">View</span>
                   <span class="shrink-0" aria-hidden="true">→</span>
                 </a>
-                <p v-else class="mt-3 font-data text-[12px] text-steel">Comming soon</p>
+                <p v-else class="font-data text-[12px] text-steel">Comming soon</p>
               </div>
             </div>
           </article>
         </template>
 
-        <!-- Visible at every width now that the deck stacks at every width; it
-             was `hidden deck:block` because below 992 there was a rail here and
-             a full-width spacer would have been a seventh slide in it. -->
         <div aria-hidden="true" class="work-stack-tail" />
       </div>
     </div>

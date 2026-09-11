@@ -665,7 +665,7 @@ onBeforeUnmount(() => {
        `clip`, not `hidden`: `hidden` would make this a scroll container and
        compute the other axis to `auto`, which would cut the same wash off flat
        along the section's top and bottom edges. -->
-  <section id="skills" ref="sectionRef" class="overflow-x-clip py-12 md:py-[120px]">
+  <section id="skills" ref="sectionRef" class="overflow-x-clip scroll-mt-[var(--nav-h)] py-12 md:py-[120px]">
     <div class="mx-auto max-w-[1240px] px-5 md:px-8">
       <div class="skills-split">
         <div class="reveal">

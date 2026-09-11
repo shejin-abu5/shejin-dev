@@ -384,7 +384,7 @@ onMounted(() => {
   <footer
     id="contact"
     ref="footerRef"
-    class="relative overflow-y-clip bg-ink pb-16 pt-16 text-paper md:pb-[120px] md:pt-[120px]"
+    class="relative overflow-y-clip scroll-mt-[var(--nav-h)] bg-ink pb-16 pt-16 text-paper md:pb-[120px] md:pt-[120px]"
   >
     <!-- The name, set as large as the frame allows and run off the bottom of
          the document.

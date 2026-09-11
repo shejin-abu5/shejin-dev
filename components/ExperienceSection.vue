@@ -642,6 +642,11 @@ onBeforeUnmount(() => {
 .gantt-section {
   background: theme('colors.paper-soft');
   padding: 3rem 0;
+  /* Clears the fixed nav when the Career link scrolls here — see `--nav-h`
+     in main.css. On the class rather than as a utility because this section
+     already takes its padding from here, and the two want to be read
+     together. */
+  scroll-margin-top: var(--nav-h);
 }
 
 @media (min-width: 768px) {

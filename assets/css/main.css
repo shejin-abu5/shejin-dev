@@ -49,6 +49,35 @@ body {
      and most of a screen tall — and tying the two together would mean the
      sections could only ever be resized by shrinking the hero. */
   --cameo: 152px;
+
+  /* How tall the fixed nav is, so anchor targets can scroll clear of it.
+     Consumed as `scroll-mt-[var(--nav-h)]` by the four sections the nav links
+     at — Selected Work, Experience, Skills, the footer.
+
+     Without it a `#work` click puts the section's own box top at y=0 and the
+     bar sits on top of it: the sections carry 48px of top padding on a phone
+     against an 81px nav, so the eyebrow label — `01 — work`, `02 — Career`,
+     `03 — Stack` — landed behind the bar every time. It read as correct above
+     `md` only because 120px of padding there is more than the 89px nav, which
+     is a section wide enough to hide the fault rather than a section without
+     one.
+
+     Both numbers are the nav's 22px of padding top and bottom, plus its 1px
+     border, plus the tallest thing in its row: the 36px burger below `md`, the
+     44px logo from `md` up. Change either of those in TheNav and this has to
+     move with them.
+
+     Static rather than measured from the element, and the mobile menu is why:
+     the panel opens *inside* the nav, so a runtime height read while it is
+     open — which is exactly when a link is tapped — would be the height of the
+     bar plus four menu rows. */
+  --nav-h: 81px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --nav-h: 89px;
+  }
 }
 
 body {
